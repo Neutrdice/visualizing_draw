@@ -496,11 +496,20 @@ updateHiddenButtonState() {
         this.updateJsonPreview();
         this.saveToLocalStorage();
         
-        // 滚动到移动后的位置
+        // 滚动到移动后的位置，并保持选中状态
         const cardsEditor = document.getElementById("cardsEditor");
         const movedCard = document.querySelector(`.card-item[data-index="${newIndex}"]`);
         if (cardsEditor && movedCard) {
             cardsEditor.scrollTop = movedCard.offsetTop - 100;
+            // 保持选中效果与编辑焦点
+            document.querySelectorAll("#cardsEditor .card-item").forEach(item => {
+                item.classList.remove("active", "border-primary", "bg-primary/5");
+            });
+            movedCard.classList.add("active", "border-primary", "bg-primary/5");
+            const textarea = movedCard.querySelector('.card-content');
+            if (textarea) {
+                textarea.focus();
+            }
         }
     },
     
@@ -557,7 +566,11 @@ updateHiddenButtonState() {
                     <span class="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">${cardCount}</span>
                 </div>
             `;
-
+            const upDeckBtnEl = deckItem.querySelector('.move-deck-up-btn');
+            if (upDeckBtnEl) upDeckBtnEl.setAttribute('aria-label', '上移牌堆');
+            const downDeckBtnEl = deckItem.querySelector('.move-deck-down-btn');
+            if (downDeckBtnEl) downDeckBtnEl.setAttribute('aria-label', '下移牌堆');
+            
             deckItem.addEventListener("click", (e) => {
                 if (!e.target.closest("button")) {
                     this.loadDeck(deckName);
@@ -638,6 +651,12 @@ updateHiddenButtonState() {
                     <textarea class="card-content w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 min-h-[80px] text-sm">${content}</textarea>
                 </div>
             `;
+            const upBtnEl = cardItem.querySelector('.move-up-btn');
+            if (upBtnEl) upBtnEl.setAttribute('aria-label', '上移');
+            const downBtnEl = cardItem.querySelector('.move-down-btn');
+            if (downBtnEl) downBtnEl.setAttribute('aria-label', '下移');
+            const delBtnEl = cardItem.querySelector('.delete-card-btn');
+            if (delBtnEl) delBtnEl.setAttribute('aria-label', '删除');
             
             // 选中牌面效果
             cardItem.addEventListener("click", (e) => {
@@ -1563,6 +1582,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 });
 
+function debounce(fn, delay = 250) {
+    let t;
+    return function(...args) {
+        clearTimeout(t);
+        t = setTimeout(() => fn.apply(this, args), delay);
+    };
+}
+
 // 绑定事件监听器
 function bindEventListeners() {
     // 工具栏按钮 - 增加存在性检查
@@ -1627,8 +1654,11 @@ function bindEventListeners() {
     // 牌堆搜索
     const deckSearch = document.getElementById("deckSearch");
     if (deckSearch) {
+        const handleSearch = debounce((value) => {
+            deckManager.searchDecks(value);
+        }, 250);
         deckSearch.addEventListener("input", (e) => {
-            deckManager.searchDecks(e.target.value);
+            handleSearch(e.target.value);
         });
     }
     

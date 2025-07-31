@@ -3,11 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="牌堆生成编辑器，支持权重、引用与可视化抽取预览">
+    <meta name="theme-color" content="#4F46E5">
     <title>牌堆生成编辑器</title>
-    <link rel="stylesheet" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+    <link rel="dns-prefetch" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js" defer></script>
     <script>
         tailwind.config = {
             theme: {
@@ -85,6 +90,9 @@
     </style>
 </head>
 <body class="bg-gray-50 text-dark font-sans">
+    <noscript>
+        <div class="bg-yellow-50 text-yellow-800 text-center p-2">本页面需要启用 JavaScript 才能正常使用。</div>
+    </noscript>
     <header class="bg-white shadow-md fixed w-full z-10">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center space-x-2">
@@ -148,7 +156,7 @@
                             <i class="fa fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
                         </div>
                     </div>
-                    <div id="referenceList" class="max-h-60 overflow-y-auto">
+                    <div id="referenceList" class="max-h-60 overflow-y-auto content-auto">
                     </div>
                 </div>
             </div>
@@ -164,7 +172,7 @@
                             <i class="fa fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
                         </div>
                     </div>
-                    <div id="deckList" class="max-h-[calc(100vh-320px)] overflow-y-auto space-y-1.5">
+                    <div id="deckList" class="max-h-[calc(100vh-320px)] overflow-y-auto space-y-1.5 content-auto">
                     </div>
                 </div>
 
@@ -187,15 +195,15 @@
                 <div class="flex justify-between items-center mb-3">
                     <h2 class="font-semibold text-lg">牌面编辑</h2>
                     <div class="flex space-x-2">
-                        <button id="moveUpBtn" class="p-1.5 bg-gray-100 rounded hover:bg-gray-200 transition-colors">
+                        <button id="moveUpBtn" class="p-1.5 bg-gray-100 rounded hover:bg-gray-200 transition-colors" aria-label="上移选中牌面">
                             <i class="fa fa-arrow-up"></i>
                         </button>
-                        <button id="moveDownBtn" class="p-1.5 bg-gray-100 rounded hover:bg-gray-200 transition-colors">
+                        <button id="moveDownBtn" class="p-1.5 bg-gray-100 rounded hover:bg-gray-200 transition-colors" aria-label="下移选中牌面">
                             <i class="fa fa-arrow-down"></i>
                         </button>
                     </div>
                 </div>
-                <div id="cardsEditor" class="space-y-3 max-h-[calc(100vh-320px)] overflow-y-auto pb-4">
+                <div id="cardsEditor" class="space-y-3 max-h-[calc(100vh-320px)] overflow-y-auto pb-4 content-auto">
                 </div>
             </div>
 
@@ -213,7 +221,7 @@
                         </div>
                     </div>
                     
-                    <div id="jsonPreviewContainer" class="bg-gray-900 text-gray-100 p-3 rounded-md text-sm font-mono overflow-x-auto max-h-[calc(50vh-200px)] json-editor-content">
+                    <div id="jsonPreviewContainer" class="bg-gray-900 text-gray-100 p-3 rounded-md text-sm font-mono overflow-x-auto max-h-[calc(50vh-200px)] json-editor-content content-auto">
                         <pre id="jsonPreview"></pre>
                     </div>
                     <div id="jsonEditorContainer" class="hidden">
@@ -239,7 +247,7 @@
                             </button>
                         </div>
                     </div>
-                    <div id="drawResult" class="min-h-[120px] border border-gray-200 rounded-md flex items-center justify-center p-4 text-center">
+                    <div id="drawResult" class="min-h-[120px] border border-gray-200 rounded-md flex items-center justify-center p-4 text-center" aria-live="polite" role="status">
                         <div class="text-gray-400">
                             <i class="fa fa-hand-o-down text-3xl mb-2 block"></i>
                             <p>点击"抽取牌面"按钮预览结果</p>
@@ -285,7 +293,7 @@
         </div>
     </div>
 
-    <script src="./js/main.js"></script>
+    <script src="./js/main.js" defer></script>
 </body>
 </html>
     
