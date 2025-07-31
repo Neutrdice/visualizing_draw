@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>牌堆生成编辑器</title>
+    <link rel="stylesheet" href="https://cdn.tailwindcss.com">
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4F46E5',
+                        secondary: '#10B981',
+                        accent: '#F59E0B',
+                        dark: '#1F2937',
+                        light: '#F3F4F6'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .deck-shadow {
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            }
+            .editor-height {
+                height: calc(100vh - 180px);
+            }
+            .preview-height {
+                max-height: calc(100vh - 180px);
+                overflow-y: auto;
+            }
+            .json-fullscreen {
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                bottom: 0 !important;
+                z-index: 40 !important;
+                margin: 0 !important;
+                border-radius: 0 !important;
+                max-height: none !important;
+            }
+            .json-fullscreen-toolbar {
+                position: fixed;
+                top: 10px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(255, 255, 255, 0.9);
+                padding: 8px 16px;
+                border-radius: 4px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+                z-index: 41;
+            }
+            .json-editor-content {
+                font-family: 'Consolas', 'Monaco', monospace;
+                font-size: 0.875rem;
+                line-height: 1.5;
+            }
+            .slide-in {
+                animation: slideIn 0.3s ease-out forwards;
+            }
+            @keyframes slideIn {
+                from {
+                    transform: translateY(20px);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateY(0);
+                    opacity: 1;
+                }
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-dark font-sans">
+    <header class="bg-white shadow-md fixed w-full z-10">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fa fa-th-large text-primary text-2xl"></i>
+                <h1 class="text-xl font-bold text-primary">牌堆生成编辑器</h1>
+            </div>
+            <div class="flex space-x-3">
+                <button id="importBtn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md flex items-center transition-colors">
+                    <i class="fa fa-upload mr-2"></i>导入
+                </button>
+                <button id="exportBtn" class="px-4 py-2 bg-secondary text-white hover:bg-secondary/90 rounded-md flex items-center transition-colors">
+                    <i class="fa fa-download mr-2"></i>导出
+                </button>
+                <button id="saveBtn" class="px-4 py-2 bg-primary text-white hover:bg-primary/90 rounded-md flex items-center transition-colors">
+                    <i class="fa fa-save mr-2"></i>保存
+                </button>
+                <!-- 添加清除按钮 -->
+                <button id="clearAllBtn" class="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-md flex items-center transition-colors">
+                    <i class="fa fa-trash mr-2"></i>清除
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="container mx-auto px-4 pt-24 pb-10">
+        <!-- 工具栏 -->
+        <div class="bg-white rounded-lg shadow-sm p-3 mb-4 flex flex-wrap gap-2">
+            <button id="newDeckBtn" class="px-3 py-1.5 bg-primary/10 text-primary rounded-md hover:bg-primary/20 transition-colors text-sm">
+                <i class="fa fa-plus mr-1"></i>新建牌堆
+            </button>
+            <button id="deleteDeckBtn" class="px-3 py-1.5 bg-red-100 text-red-600 rounded-md hover:bg-red-200 transition-colors text-sm">
+                <i class="fa fa-trash mr-1"></i>删除牌堆
+            </button>
+            <div class="h-5 border-r border-gray-300 mx-1"></div>
+            <button id="addCardBtn" class="px-3 py-1.5 bg-secondary/10 text-secondary rounded-md hover:bg-secondary/20 transition-colors text-sm">
+                <i class="fa fa-plus-circle mr-1"></i>添加牌面
+            </button>
+            <button id="removeCardBtn" class="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 transition-colors text-sm">
+                <i class="fa fa-minus-circle mr-1"></i>移除牌面
+            </button>
+            <div class="h-5 border-r border-gray-300 mx-1"></div>
+            <button id="toggleWeightBtn" class="px-3 py-1.5 bg-accent/10 text-accent rounded-md hover:bg-accent/20 transition-colors text-sm">
+                <i class="fa fa-balance-scale mr-1"></i>权重模式
+            </button>
+            <button id="toggleHiddenBtn" class="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 transition-colors text-sm">
+                <i class="fa fa-eye-slash mr-1"></i>
+                <span id="hiddenBtnText">隐藏牌堆</span>
+            </button>
+            <div class="h-5 border-r border-gray-300 mx-1"></div>
+            
+            <!-- 快速引用功能区域 -->
+            <div id="quickReferenceContainer" class="relative">
+                <button id="quickReferenceBtn" class="px-3 py-1.5 bg-secondary/10 text-secondary rounded-md hover:bg-secondary/20 transition-colors text-sm">
+                    <i class="fa fa-quote-right mr-1"></i>引用牌堆
+                </button>
+                <div id="referenceDropdown" class="hidden absolute z-10 mt-1 w-64 bg-white rounded-md shadow-lg border border-gray-200">
+                    <div class="p-2 border-b border-gray-200">
+                        <div class="relative">
+                            <input type="text" id="referenceSearch" placeholder="搜索牌堆..." class="pl-8 pr-3 py-1 border border-gray-300 rounded-md text-sm w-full focus:outline-none focus:ring-2 focus:ring-primary/50">
+                            <i class="fa fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                        </div>
+                    </div>
+                    <div id="referenceList" class="max-h-60 overflow-y-auto">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div class="lg:col-span-1 space-y-4">
+                <div class="bg-white rounded-lg shadow-sm p-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h2 class="font-semibold text-lg">牌堆列表</h2>
+                        <div class="relative">
+                            <input type="text" id="deckSearch" placeholder="搜索牌堆..." class="pl-8 pr-3 py-1 border border-gray-300 rounded-md text-sm w-full focus:outline-none focus:ring-2 focus:ring-primary/50">
+                            <i class="fa fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                        </div>
+                    </div>
+                    <div id="deckList" class="max-h-[calc(100vh-320px)] overflow-y-auto space-y-1.5">
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm p-4">
+                    <h2 class="font-semibold text-lg mb-3">牌堆信息</h2>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-sm text-gray-600 mb-1">牌堆名称</label>
+                            <input type="text" id="deckNameInput" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="输入牌堆名称">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-600 mb-1">牌面数量</label>
+                            <input type="number" id="cardCountDisplay" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 cursor-not-allowed" value="0" readonly>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-1 bg-white rounded-lg shadow-sm p-4">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="font-semibold text-lg">牌面编辑</h2>
+                    <div class="flex space-x-2">
+                        <button id="moveUpBtn" class="p-1.5 bg-gray-100 rounded hover:bg-gray-200 transition-colors">
+                            <i class="fa fa-arrow-up"></i>
+                        </button>
+                        <button id="moveDownBtn" class="p-1.5 bg-gray-100 rounded hover:bg-gray-200 transition-colors">
+                            <i class="fa fa-arrow-down"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="cardsEditor" class="space-y-3 max-h-[calc(100vh-320px)] overflow-y-auto pb-4">
+                </div>
+            </div>
+
+            <div class="lg:col-span-1 space-y-4">
+                <div class="bg-white rounded-lg shadow-sm p-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h2 class="font-semibold text-lg">JSON数据</h2>
+                        <div class="flex space-x-2">
+                            <button id="toggleEditModeBtn" class="px-3 py-1.5 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors text-sm">
+                                编辑模式
+                            </button>
+                            <button id="toggleFullscreenBtn" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm">
+                                <i class="fa fa-expand mr-1"></i>全屏
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="jsonPreviewContainer" class="bg-gray-900 text-gray-100 p-3 rounded-md text-sm font-mono overflow-x-auto max-h-[calc(50vh-200px)] json-editor-content">
+                        <pre id="jsonPreview"></pre>
+                    </div>
+                    <div id="jsonEditorContainer" class="hidden">
+                        <div class="bg-gray-900 text-gray-100 p-3 rounded-md overflow-x-auto max-h-[calc(50vh-260px)]">
+                            <textarea id="jsonEditor" class="w-full h-full bg-transparent border-none focus:outline-none resize-none json-editor-content"></textarea>
+                        </div>
+                        <div class="mt-2 flex justify-end">
+                            <button id="applyJsonChangesBtn" class="px-3 py-1.5 bg-secondary text-white rounded-md hover:bg-secondary/90 transition-colors text-sm">
+                                应用更改
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm p-4">
+                    <div class="flex flex-wrap justify-between items-center mb-3 gap-2">
+                        <h2 class="font-semibold text-lg">抽取预览</h2>
+                        <div class="flex items-center space-x-2">
+                            <select id="drawDeckSelector" class="px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                            </select>
+                            <button id="drawCardBtn" class="px-3 py-1.5 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors text-sm">
+                                <i class="fa fa-random mr-1"></i>抽取牌面
+                            </button>
+                        </div>
+                    </div>
+                    <div id="drawResult" class="min-h-[120px] border border-gray-200 rounded-md flex items-center justify-center p-4 text-center">
+                        <div class="text-gray-400">
+                            <i class="fa fa-hand-o-down text-3xl mb-2 block"></i>
+                            <p>点击"抽取牌面"按钮预览结果</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm p-4">
+                    <h2 class="font-semibold text-lg mb-3">概率分布</h2>
+                    <div class="h-[200px]">
+                        <canvas id="probabilityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="importModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-lg w-full max-w-md mx-4">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="font-semibold text-lg">导入牌堆</h3>
+                <button id="closeImportModal" class="text-gray-400 hover:text-gray-600">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <div class="mb-4">
+                    <label class="block text-sm text-gray-600 mb-2">上传JSON文件</label>
+                    <div class="border-2 border-dashed border-gray-300 rounded-md p-6 text-center hover:bg-gray-50 transition-colors cursor-pointer">
+                        <i class="fa fa-file-text-o text-3xl text-gray-400 mb-2"></i>
+                        <p class="text-sm text-gray-500">拖放文件到此处或点击上传</p>
+                        <input type="file" id="fileInput" class="hidden" accept=".json">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-600 mb-2">或粘贴JSON内容</label>
+                    <textarea id="jsonImportTextarea" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 min-h-[150px] text-sm font-mono" placeholder="粘贴JSON格式的牌堆内容"></textarea>
+                </div>
+            </div>
+            <div class="p-4 border-t border-gray-200 flex justify-end">
+                <button id="confirmImportBtn" class="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors">导入</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="./js/main.js"></script>
+</body>
+</html>
+    
+    
