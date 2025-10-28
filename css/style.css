@@ -805,3 +805,25 @@ textarea.rounded-md {
   line-height: 1.6;
 }
     
+/* 拖动排序视觉提示（移动端） */
+.card-item.dragging {
+    background-color: rgba(59, 130, 246, 0.06);
+}
+.card-item.drop-before {
+    border-top: 2px dashed var(--primary);
+}
+.card-item.drop-after {
+    border-bottom: 2px dashed var(--primary);
+}
+
+/* 牌堆列表拖动提示（使用内阴影避免影响布局） */
+#deckList [data-deck].dragging {
+    box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+#deckList [data-deck].drop-before {
+    box-shadow: inset 0 2px 0 var(--primary);
+}
+#deckList [data-deck].drop-after {
+    box-shadow: inset 0 -2px 0 var(--primary);
+}
+    

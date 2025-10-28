@@ -7,6 +7,10 @@ const deckManager = {
     editMode: false,
     fullscreenJson: false,
     jsonOriginalStyles: null, // 用于保存全屏前的样式
+    // 移动端拖动排序配置与状态
+    isTouchDevice: typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0),
+    longPressDelay: 250,
+    dragState: null,
     
     // 初始化
     init() {
@@ -70,10 +74,12 @@ const deckManager = {
 
         if (upBtn) {
             e.stopPropagation();
-            this.moveDeckUp(upBtn.dataset.deck);
+            const container = upBtn.closest('[data-deck]');
+            if (container) this.moveDeckUp(container.dataset.deck);
         } else if (downBtn) {
             e.stopPropagation();
-            this.moveDeckDown(downBtn.dataset.deck);
+            const container = downBtn.closest('[data-deck]');
+            if (container) this.moveDeckDown(container.dataset.deck);
         }
     },
     
@@ -612,27 +618,39 @@ updateHiddenButtonState() {
                     <span>${escapeHtml(displayName)}</span>
                 </div>
                 <div class="flex items-center">
-                    <button class="move-deck-up-btn p-1 text-gray-400 hover:text-gray-600 mr-1" data-deck="${deckName}" title="上移">
+                    <button class="move-deck-up-btn p-1 text-gray-400 hover:text-gray-600 mr-1" title="上移">
                         <i class="fa fa-arrow-up text-xs"></i>
                     </button>
-                    <button class="move-deck-down-btn p-1 text-gray-400 hover:text-gray-600 mr-2" data-deck="${deckName}" title="下移">
+                    <button class="move-deck-down-btn p-1 text-gray-400 hover:text-gray-600 mr-2" title="下移">
                         <i class="fa fa-arrow-down text-xs"></i>
                     </button>
                     <span class="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">${cardCount}</span>
                 </div>
             `;
             const upDeckBtnEl = deckItem.querySelector('.move-deck-up-btn');
-            if (upDeckBtnEl) upDeckBtnEl.setAttribute('aria-label', '上移牌堆');
+            if (upDeckBtnEl) {
+                upDeckBtnEl.setAttribute('aria-label', '上移牌堆');
+                // 不在按钮上设置 data-deck，避免影响拖动/FLIP 选择器
+            }
             const downDeckBtnEl = deckItem.querySelector('.move-deck-down-btn');
-            if (downDeckBtnEl) downDeckBtnEl.setAttribute('aria-label', '下移牌堆');
+            if (downDeckBtnEl) {
+                downDeckBtnEl.setAttribute('aria-label', '下移牌堆');
+                // 不在按钮上设置 data-deck，避免影响拖动/FLIP 选择器
+            }
             
             deckItem.addEventListener("click", (e) => {
                 if (!e.target.closest("button")) {
+                    if (this.suppressDeckClick) return;
                     this.loadDeck(deckName);
                 }
             });
 
             deckListElement.appendChild(deckItem);
+
+            // 移动端长按拖动排序（仅触屏设备启用，非过滤视图）
+            if (this.isTouchDevice) {
+                this.attachDeckDragHandlers(deckItem, index);
+            }
         });
 },
 
@@ -800,7 +818,148 @@ updateHiddenButtonState() {
             });
             
             cardsEditor.appendChild(cardItem);
+            // 移动端长按拖动排序（仅触屏设备启用）
+            if (this.isTouchDevice) {
+                this.attachCardDragHandlers(cardItem, index);
+            }
         });
+    },
+    // 为牌面元素绑定长按拖动事件（移动端）
+    attachCardDragHandlers(cardItem, index) {
+        const container = document.getElementById('cardsEditor');
+        if (!container) return;
+
+        let startY = 0;
+        let startX = 0;
+
+        const clearTimer = () => {
+            if (this.dragState && this.dragState.timer) {
+                clearTimeout(this.dragState.timer);
+                this.dragState.timer = null;
+            }
+        };
+
+        const onTouchStart = (e) => {
+            if (!e.touches || e.touches.length === 0) return;
+            // 避免点击按钮触发拖动
+            if (e.target.closest('button')) return;
+
+            startY = e.touches[0].clientY;
+            startX = e.touches[0].clientX;
+
+            this.dragState = {
+                type: 'card',
+                startIndex: index,
+                currentInsertPos: index,
+                container,
+                element: cardItem,
+                active: false,
+                timer: setTimeout(() => {
+                    this.dragState.active = true;
+                    cardItem.classList.add('dragging');
+                }, this.longPressDelay)
+            };
+        };
+
+        const onTouchMove = (e) => {
+            if (!this.dragState || this.dragState.type !== 'card') return;
+            if (!e.touches || e.touches.length === 0) return;
+            const y = e.touches[0].clientY;
+            const x = e.touches[0].clientX;
+
+            // 在长按启动前的位移，若过大则取消长按
+            if (!this.dragState.active) {
+                if (Math.abs(y - startY) > 10 || Math.abs(x - startX) > 10) {
+                    clearTimer();
+                    return;
+                }
+                return;
+            }
+
+            // 长按已激活，阻止默认滚动，进行拖动处理
+            e.preventDefault();
+
+            const insertPos = this.getInsertPositionForCards(y);
+            if (insertPos !== null && insertPos !== this.dragState.currentInsertPos) {
+                this.dragState.currentInsertPos = insertPos;
+                this.highlightCardDropPos(insertPos);
+            }
+
+            this.autoScrollContainer(container, y);
+        };
+
+        const endDrag = () => {
+            clearTimer();
+            if (!this.dragState || this.dragState.type !== 'card') return;
+            const { startIndex, currentInsertPos } = this.dragState;
+            cardItem.classList.remove('dragging');
+            this.clearCardDropHighlight();
+            if (this.dragState.active && typeof startIndex === 'number' && typeof currentInsertPos === 'number') {
+                this.performCardReorder(startIndex, currentInsertPos);
+            }
+            this.dragState = null;
+        };
+
+        cardItem.addEventListener('touchstart', onTouchStart, { passive: true });
+        cardItem.addEventListener('touchmove', onTouchMove, { passive: false });
+        cardItem.addEventListener('touchend', endDrag, { passive: true });
+        cardItem.addEventListener('touchcancel', endDrag, { passive: true });
+    },
+
+    getInsertPositionForCards(y) {
+        const items = Array.from(document.querySelectorAll('#cardsEditor .card-item'));
+        if (!items.length) return 0;
+        for (let i = 0; i < items.length; i++) {
+            const rect = items[i].getBoundingClientRect();
+            if (y < rect.top + rect.height / 2) {
+                return i;
+            }
+        }
+        return items.length; // 末尾位置
+    },
+
+    highlightCardDropPos(insertPos) {
+        const items = Array.from(document.querySelectorAll('#cardsEditor .card-item'));
+        items.forEach((el, i) => {
+            el.classList.remove('drop-before', 'drop-after');
+            if (insertPos === i) {
+                el.classList.add('drop-before');
+            } else if (insertPos === items.length && i === items.length - 1) {
+                el.classList.add('drop-after');
+            }
+        });
+    },
+
+    clearCardDropHighlight() {
+        const items = Array.from(document.querySelectorAll('#cardsEditor .card-item'));
+        items.forEach(el => el.classList.remove('drop-before', 'drop-after'));
+    },
+
+    performCardReorder(fromIndex, insertPos) {
+        if (!this.currentDeck || !Array.isArray(this.decks[this.currentDeck])) return;
+        const list = this.decks[this.currentDeck];
+        if (fromIndex < 0 || fromIndex >= list.length) return;
+        let pos = insertPos;
+        if (pos > list.length) pos = list.length;
+        const [moved] = list.splice(fromIndex, 1);
+        // 如果向下移动，删除后插入位置左移一位
+        if (pos > fromIndex) pos--;
+        list.splice(pos, 0, moved);
+        this.updateCardCount();
+        this.renderCards();
+        this.updateJsonPreview();
+        this.updateProbabilityChart();
+        this.saveToLocalStorage();
+    },
+
+    autoScrollContainer(container, y) {
+        const rect = container.getBoundingClientRect();
+        const threshold = 40; // 距边界阈值
+        if (y - rect.top < threshold) {
+            container.scrollTop -= 12;
+        } else if (rect.bottom - y < threshold) {
+            container.scrollTop += 12;
+        }
     },
     
     // 清空牌面编辑器
@@ -1585,7 +1744,146 @@ updateHiddenButtonState() {
             
             deckItem.addEventListener("click", () => this.loadDeck(deckName));
             deckListElement.appendChild(deckItem);
+            // 过滤视图下不启用拖动排序，避免索引映射与插入位置不一致
         });
+    },
+    // 为牌堆列表元素绑定长按拖动事件（移动端）
+    attachDeckDragHandlers(deckItem, index) {
+        const container = document.getElementById('deckList');
+        if (!container) return;
+
+        let startY = 0;
+        let startX = 0;
+
+        const clearTimer = () => {
+            if (this.dragState && this.dragState.timer) {
+                clearTimeout(this.dragState.timer);
+                this.dragState.timer = null;
+            }
+        };
+
+        const onTouchStart = (e) => {
+            if (!e.touches || e.touches.length === 0) return;
+            if (e.target.closest('button')) return; // 避免与上移/下移按钮冲突
+            startY = e.touches[0].clientY;
+            startX = e.touches[0].clientX;
+            const deckName = deckItem.dataset.deck;
+            this.dragState = {
+                type: 'deck',
+                startIndex: index,
+                deckName,
+                currentInsertPos: index,
+                container,
+                element: deckItem,
+                active: false,
+                timer: setTimeout(() => {
+                    this.dragState.active = true;
+                    deckItem.classList.add('dragging');
+                }, this.longPressDelay)
+            };
+        };
+
+        const onTouchMove = (e) => {
+            if (!this.dragState || this.dragState.type !== 'deck') return;
+            if (!e.touches || e.touches.length === 0) return;
+            const y = e.touches[0].clientY;
+            const x = e.touches[0].clientX;
+            if (!this.dragState.active) {
+                if (Math.abs(y - startY) > 10 || Math.abs(x - startX) > 10) {
+                    clearTimer();
+                    return;
+                }
+                return;
+            }
+            e.preventDefault();
+            const insertPos = this.getInsertPositionForDecks(y);
+            if (insertPos !== null && insertPos !== this.dragState.currentInsertPos) {
+                this.dragState.currentInsertPos = insertPos;
+                this.highlightDeckDropPos(insertPos);
+            }
+            this.autoScrollContainer(container, y);
+        };
+
+        const endDrag = () => {
+            clearTimer();
+            if (!this.dragState || this.dragState.type !== 'deck') return;
+            const wasActive = !!this.dragState.active;
+            // 仅在实际发生拖动（长按生效）时抑制随后点击，避免正常点按被阻止
+            if (wasActive) {
+                this.suppressDeckClick = true;
+                setTimeout(() => { this.suppressDeckClick = false; }, 200);
+            }
+
+            const { deckName, currentInsertPos } = this.dragState;
+            // 以 deckName 解析当前索引，避免渲染时传入的 index 与对象键序不一致
+            const deckNames = Object.keys(this.decks);
+            const resolvedStartIndex = deckNames.indexOf(deckName);
+            deckItem.classList.remove('dragging');
+            this.clearDeckDropHighlight();
+            if (wasActive && typeof resolvedStartIndex === 'number' && resolvedStartIndex >= 0 && typeof currentInsertPos === 'number') {
+                this.moveDeckToInsertPos(resolvedStartIndex, currentInsertPos);
+            }
+            this.dragState = null;
+        };
+
+        deckItem.addEventListener('touchstart', onTouchStart, { passive: true });
+        deckItem.addEventListener('touchmove', onTouchMove, { passive: false });
+        deckItem.addEventListener('touchend', endDrag, { passive: true });
+        deckItem.addEventListener('touchcancel', endDrag, { passive: true });
+    },
+
+    getInsertPositionForDecks(y) {
+        const items = Array.from(document.querySelectorAll('#deckList [data-deck]'));
+        if (!items.length) return 0;
+        for (let i = 0; i < items.length; i++) {
+            const rect = items[i].getBoundingClientRect();
+            if (y < rect.top + rect.height / 2) {
+                return i;
+            }
+        }
+        return items.length;
+    },
+
+    highlightDeckDropPos(insertPos) {
+        const items = Array.from(document.querySelectorAll('#deckList [data-deck]'));
+        items.forEach((el, i) => {
+            el.classList.remove('drop-before', 'drop-after');
+            if (insertPos === i) {
+                el.classList.add('drop-before');
+            } else if (insertPos === items.length && i === items.length - 1) {
+                el.classList.add('drop-after');
+            }
+        });
+    },
+
+    clearDeckDropHighlight() {
+        const items = Array.from(document.querySelectorAll('#deckList [data-deck]'));
+        items.forEach(el => el.classList.remove('drop-before', 'drop-after'));
+    },
+
+    moveDeckToInsertPos(fromIndex, insertPos) {
+        const deckNames = Object.keys(this.decks);
+        if (deckNames.length === 0) return;
+        let pos = insertPos;
+        if (pos > deckNames.length) pos = deckNames.length;
+        const movedDeckName = deckNames[fromIndex];
+        const newDeckNames = deckNames.filter((_, i) => i !== fromIndex);
+        if (pos > fromIndex) pos--; // 删除后向下移动时插入位置左移
+        newDeckNames.splice(pos, 0, movedDeckName);
+
+        const beforeRects = this.captureDeckListRects();
+        const direction = pos < fromIndex ? 'up' : 'down';
+        const newDecks = {};
+        newDeckNames.forEach(name => { newDecks[name] = this.decks[name]; });
+        this.decks = newDecks;
+
+        this.renderDeckList();
+        this.updateDrawDeckSelector();
+        this.updateJsonPreview();
+        this.saveToLocalStorage();
+
+        // 播放 FLIP 过渡动画，保持与按钮上/下移一致的体验
+        this.playDeckListFlip(beforeRects, movedDeckName, direction);
     },
     
     // 显示通知
@@ -1987,13 +2285,7 @@ function bindEventListeners() {
         });
     }
     
-    // 清除所有牌堆按钮
-    const clearBtn = document.getElementById("clearBtn");
-    if (clearBtn) {
-        clearBtn.addEventListener("click", () => {
-            deckManager.clearAllDecks();
-        });
-    }
+    // 清除所有牌堆按钮由 deckManager.init 绑定，避免重复绑定
     
     // 导入模态框
     const importModal = document.getElementById("importModal");
@@ -2061,13 +2353,7 @@ function bindEventListeners() {
         }
     }
     
-    // 抽取牌面
-    const drawCardBtn = document.getElementById("drawCardBtn");
-    if (drawCardBtn) {
-        drawCardBtn.addEventListener("click", () => {
-            deckManager.drawCard();
-        });
-    }
+    // 抽取牌面按钮由 deckManager.init 绑定，避免重复绑定
     
     // 拖放文件上传
     const fileDropArea = document.querySelector("#importModal .border-dashed");
@@ -2157,13 +2443,7 @@ function bindEventListeners() {
         });
     }
     
-    // 牌堆选择器变化时更新概率图表
-    const drawDeckSelector = document.getElementById("drawDeckSelector");
-    if (drawDeckSelector) {
-        drawDeckSelector.addEventListener("change", () => {
-            // 可以在这里添加临时显示选中牌堆信息的逻辑
-        });
-    }
+    // 牌堆选择器 change 事件由 deckManager.init 绑定，避免重复绑定
     
     // JSON全屏切换（优先原生全屏，失败回退样式）
     const toggleFullscreenBtn = document.getElementById("toggleFullscreenBtn");
