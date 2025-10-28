@@ -173,6 +173,7 @@ const deckManager = {
         
         // 创建中心弹窗进行二次确认
         const modal = document.createElement('div');
+        modal.id = 'clearConfirmModal';
         modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4';
         modal.innerHTML = `
             <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6 transform transition-all">
@@ -248,7 +249,9 @@ const deckManager = {
         
         this.currentDeck = deckName;
         document.getElementById("deckNameInput").value = deckName.replace(/^_/, "");
-    
+        const hiddenDeckCheckbox = document.getElementById('hiddenDeckCheckbox');
+        if (hiddenDeckCheckbox) hiddenDeckCheckbox.checked = deckName.startsWith('_');
+
     // 更新隐藏按钮状态
     this.updateHiddenButtonState();
     
@@ -280,6 +283,10 @@ const deckManager = {
     // 交换两个牌堆的位置
     swapDecks(index1, index2) {
         const deckNames = Object.keys(this.decks);
+        // 在DOM更新前捕获各牌堆位置用于FLIP动画
+        const beforeRects = this.captureDeckListRects();
+        const movedDeckName = deckNames[index1];
+        const direction = index2 < index1 ? 'up' : 'down';
         
         // 创建新的牌堆名称顺序数组
         const newDeckNames = [...deckNames];
@@ -299,6 +306,9 @@ const deckManager = {
         this.updateDrawDeckSelector();
         this.updateJsonPreview(); // 添加JSON预览更新
         this.saveToLocalStorage();
+
+        // 播放FLIP过渡与弹性动画
+        this.playDeckListFlip(beforeRects, movedDeckName, direction);
     },
 
 // 更新隐藏按钮状态显示
@@ -306,6 +316,7 @@ updateHiddenButtonState() {
     const isHidden = this.currentDeck && this.currentDeck.startsWith("_");
     const btnElement = document.getElementById('toggleHiddenBtn');
     const textElement = document.getElementById('hiddenBtnText');
+    const hiddenDeckCheckbox = document.getElementById('hiddenDeckCheckbox');
     
     // 添加安全检查
     if (!btnElement || !textElement) {
@@ -322,6 +333,8 @@ updateHiddenButtonState() {
         btnElement.classList.add('bg-gray-100', 'text-gray-600');
         textElement.textContent = '隐藏牌堆';
     }
+    // 同步复选框状态
+    if (hiddenDeckCheckbox) hiddenDeckCheckbox.checked = !!isHidden;
 },
 
 // 切换牌堆隐藏状态
@@ -360,6 +373,8 @@ updateHiddenButtonState() {
         
         // 更新界面
         document.getElementById("deckNameInput").value = baseName;
+        const hiddenDeckCheckbox = document.getElementById('hiddenDeckCheckbox');
+        if (hiddenDeckCheckbox) hiddenDeckCheckbox.checked = newName.startsWith('_');
         this.updateHiddenButtonState();
         this.renderDeckList();
         this.updateDrawDeckSelector();
@@ -407,6 +422,12 @@ updateHiddenButtonState() {
 
             this.decks = newDecks;
             this.currentDeck = normalizedName;
+            // 重命名后同步界面：输入框显示不带下划线的基础名称，隐藏按钮与复选框状态刷新
+            const deckNameInputEl = document.getElementById("deckNameInput");
+            if (deckNameInputEl) deckNameInputEl.value = normalizedName.replace(/^_/, "");
+            const hiddenDeckCheckbox = document.getElementById('hiddenDeckCheckbox');
+            if (hiddenDeckCheckbox) hiddenDeckCheckbox.checked = normalizedName.startsWith('_');
+            this.updateHiddenButtonState();
             this.renderDeckList();
             this.updateDrawDeckSelector();
         }
@@ -479,37 +500,70 @@ updateHiddenButtonState() {
         this.saveToLocalStorage();
     },
     
-    // 移动牌面位置
+    // 移动牌面位置（无回弹，纯交换FLIP过渡）
     moveCard(index, direction) {
         if (!this.currentDeck || !Array.isArray(this.decks[this.currentDeck]) || this.decks[this.currentDeck].length <= 1) return;
-        
         const newIndex = direction === "up" ? index - 1 : index + 1;
-        
         if (newIndex < 0 || newIndex >= this.decks[this.currentDeck].length) return;
-        
-        // 交换位置
+
+        const cardsEditor = document.getElementById("cardsEditor");
+        const elA_before = document.querySelector(`.card-item[data-index="${index}"]`);
+        const elB_before = document.querySelector(`.card-item[data-index="${newIndex}"]`);
+        const rectA_before = elA_before ? elA_before.getBoundingClientRect() : null;
+        const rectB_before = elB_before ? elB_before.getBoundingClientRect() : null;
+
+        // 数据交换
         const temp = this.decks[this.currentDeck][index];
         this.decks[this.currentDeck][index] = this.decks[this.currentDeck][newIndex];
         this.decks[this.currentDeck][newIndex] = temp;
-        
+
+        // 重新渲染（按钮闭包依赖index，需要重建）
         this.renderCards();
+
+        // FLIP：对两个参与交换的元素执行位置过渡
+        const elA_after = document.querySelector(`.card-item[data-index="${newIndex}"]`);
+        const elB_after = document.querySelector(`.card-item[data-index="${index}"]`);
+        const runFlip = (el, rectBefore) => {
+            if (!el || !rectBefore) return;
+            const rectAfter = el.getBoundingClientRect();
+            const dx = rectBefore.left - rectAfter.left;
+            const dy = rectBefore.top - rectAfter.top;
+            if (dx !== 0 || dy !== 0) {
+                el.style.transition = 'none';
+                el.style.transform = `translate(${dx}px, ${dy}px)`;
+                // 强制回流
+                el.getBoundingClientRect();
+                requestAnimationFrame(() => {
+                    el.style.transition = 'transform 260ms cubic-bezier(0.4, 0, 0.2, 1)';
+                    el.style.transform = 'translate(0, 0)';
+                });
+                const clear = (e) => {
+                    if (e.propertyName === 'transform') {
+                        el.style.transition = '';
+                        el.style.transform = '';
+                        el.removeEventListener('transitionend', clear);
+                    }
+                };
+                el.addEventListener('transitionend', clear);
+            }
+        };
+        runFlip(elA_after, rectA_before);
+        runFlip(elB_after, rectB_before);
+
+        // 同步其它区域
         this.updateJsonPreview();
         this.saveToLocalStorage();
-        
+
         // 滚动到移动后的位置，并保持选中状态
-        const cardsEditor = document.getElementById("cardsEditor");
         const movedCard = document.querySelector(`.card-item[data-index="${newIndex}"]`);
         if (cardsEditor && movedCard) {
             cardsEditor.scrollTop = movedCard.offsetTop - 100;
-            // 保持选中效果与编辑焦点
             document.querySelectorAll("#cardsEditor .card-item").forEach(item => {
                 item.classList.remove("active", "border-primary", "bg-primary/5");
             });
             movedCard.classList.add("active", "border-primary", "bg-primary/5");
             const textarea = movedCard.querySelector('.card-content');
-            if (textarea) {
-                textarea.focus();
-            }
+            if (textarea) textarea.focus();
         }
     },
     
@@ -548,8 +602,9 @@ updateHiddenButtonState() {
             const cardCount = Array.isArray(this.decks[deckName]) ? this.decks[deckName].length : 0;
 
             const deckItem = document.createElement("div");
-            deckItem.className = "p-2 rounded-md cursor-pointer transition-colors text-sm flex justify-between items-center " + 
+            deckItem.className = "p-2 rounded-md cursor-pointer transition-colors text-sm flex justify-between items-center flip-animate " + 
                                 (isCurrent ? "bg-primary/10 text-primary" : "bg-gray-100 hover:bg-gray-200");
+            deckItem.dataset.deck = deckName;
 
             deckItem.innerHTML = `
                 <div class="flex items-center flex-1">
@@ -580,6 +635,47 @@ updateHiddenButtonState() {
             deckListElement.appendChild(deckItem);
         });
 },
+
+    // 捕获牌堆列表每项的初始位置（用于FLIP）
+    captureDeckListRects() {
+        const deckListElement = document.getElementById('deckList');
+        if (!deckListElement) return {};
+        const rects = {};
+        deckListElement.querySelectorAll('[data-deck]').forEach(el => {
+            const key = el.getAttribute('data-deck');
+            if (!key) return;
+            const r = el.getBoundingClientRect();
+            rects[key] = { top: r.top, left: r.left };
+        });
+        return rects;
+    },
+
+    // 在重排后播放FLIP动画 + 为移动项添加弹性动画
+    playDeckListFlip(beforeRects, movedDeckName, direction = 'down') {
+        if (!beforeRects || typeof beforeRects !== 'object') return;
+        const deckListElement = document.getElementById('deckList');
+        if (!deckListElement) return;
+        const items = deckListElement.querySelectorAll('[data-deck]');
+        items.forEach(el => {
+            const key = el.getAttribute('data-deck');
+            if (!key || !beforeRects[key]) return;
+            const after = el.getBoundingClientRect();
+            const dx = beforeRects[key].left - after.left;
+            const dy = beforeRects[key].top - after.top;
+            if (dx !== 0 || dy !== 0) {
+                el.style.transition = 'none';
+                el.style.transform = `translate(${dx}px, ${dy}px)`;
+                // 强制回流
+                el.getBoundingClientRect();
+                // 切回CSS过渡并移除位移
+                requestAnimationFrame(() => {
+                    el.style.transition = '';
+                    el.style.transform = 'translate(0, 0)';
+                });
+            }
+        });
+        // 移除回弹效果：不再为移动项叠加额外动画，仅保留FLIP过渡
+    },
     // 渲染牌面列表
     renderCards() {
         const cardsEditor = document.getElementById("cardsEditor");
@@ -753,6 +849,21 @@ updateHiddenButtonState() {
             
             if (editorElement && this.editMode) {
                 editorElement.value = jsonText;
+                // 自动调整编辑器高度，避免 textarea 内部滚动条
+                try {
+                    if (editorElement.classList.contains('fixed-lines')) {
+                        // 固定行模式：由外层容器滚动，文本域不滚动
+                        editorElement.style.overflowY = 'hidden';
+                        editorElement.style.overflowX = 'hidden';
+                        editorElement.style.height = '100%';
+                    } else if (typeof this.autosizeTextArea === 'function') {
+                        this.autosizeTextArea(editorElement);
+                    } else {
+                        editorElement.style.overflowY = 'hidden';
+                        editorElement.style.height = 'auto';
+                        editorElement.style.height = editorElement.scrollHeight + 'px';
+                    }
+                } catch (e) {}
             }
         } catch (e) {
             previewElement.textContent = "JSON格式错误: " + e.message;
@@ -770,6 +881,8 @@ updateHiddenButtonState() {
         const previewContent = document.getElementById("jsonPreview");
         const editorContent = document.getElementById("jsonEditor");
         const jsonContainer = document.querySelector(".json-container");
+        const applyBtn = document.getElementById("applyJsonChangesBtn");
+        const editorInner = editorElement ? editorElement.querySelector('div') : null;
         
         // 确保元素存在
         if (!previewElement || !editorElement || !previewContent || !editorContent || !toggleBtn) {
@@ -779,9 +892,14 @@ updateHiddenButtonState() {
         
         // 同步基础样式
         const syncStyles = () => {
-            // 复制容器尺寸
-            editorElement.style.width = `${previewElement.offsetWidth}px`;
-            editorElement.style.minHeight = `${previewElement.offsetHeight}px`;
+            // 统一宽度为100%，避免保留之前的像素宽度在全屏下不自适应
+            editorElement.style.width = '100%';
+            // 使用 flex 布局让内层容器占满剩余空间并滚动
+            if (editorInner) {
+                editorInner.style.height = '';
+                editorInner.style.minHeight = '0';
+                editorInner.style.overflowY = 'auto';
+            }
             
             // 获取预览区域计算后的样式
             const computedStyle = window.getComputedStyle(previewContent);
@@ -793,10 +911,16 @@ updateHiddenButtonState() {
             editorContent.style.lineHeight = computedStyle.lineHeight;
             editorContent.style.letterSpacing = computedStyle.letterSpacing;
             editorContent.style.textAlign = computedStyle.textAlign;
+            // 同步换行与单词断行策略，避免编辑/预览行显示差异
+            editorContent.style.whiteSpace = computedStyle.whiteSpace;
+            editorContent.style.wordBreak = computedStyle.wordBreak;
+            try {
+                editorContent.style.setProperty('overflow-wrap', computedStyle.getPropertyValue('overflow-wrap'));
+                editorContent.style.setProperty('tab-size', computedStyle.getPropertyValue('tab-size'));
+            } catch (e) {}
             
-            // 复制内边距和外边距
-            editorContent.style.padding = computedStyle.padding;
-            editorContent.style.margin = computedStyle.margin;
+            // 保留CSS定义的内边距，不从预览pre覆盖
+            editorContent.style.padding = '';
             
             // 复制边框样式
             editorContent.style.border = computedStyle.border;
@@ -822,6 +946,15 @@ updateHiddenButtonState() {
         
         // 计算最佳高度
         const calculateOptimalHeight = () => {
+            // 在固定 13 行模式下，跳过自动增高，保持容器滚动
+            if (editorContent.classList.contains('fixed-lines')) {
+                // 让外层（黑色容器）承担滚动：textarea 自身不显示滚动条，但高度随内容增长
+                editorContent.style.overflowY = 'hidden';
+                editorContent.style.height = 'auto';
+                const contentHeight = editorContent.scrollHeight;
+                editorContent.style.height = contentHeight + 'px';
+                return contentHeight;
+            }
             // 保存当前滚动位置
             const scrollPos = previewContent.scrollTop;
             
@@ -830,12 +963,11 @@ updateHiddenButtonState() {
             
             // 计算所需高度（内容高度 + 一些缓冲）
             const contentHeight = editorContent.scrollHeight;
-            const containerHeight = jsonContainer ? jsonContainer.offsetHeight : window.innerHeight * 0.7;
-            
-            // 取内容高度和容器高度中的较小值
-            const optimalHeight = Math.min(contentHeight, containerHeight);
+            // 统一使用内容高度，让外层容器承担滚动
+            const optimalHeight = contentHeight;
             
             // 应用计算后的高度
+            editorContent.style.overflowY = 'hidden';
             editorContent.style.height = `${optimalHeight}px`;
             
             // 恢复滚动位置
@@ -854,11 +986,38 @@ updateHiddenButtonState() {
             toggleBtn.textContent = "预览模式";
             toggleBtn.classList.remove("bg-primary");
             toggleBtn.classList.add("bg-secondary");
+            if (applyBtn) {
+                applyBtn.disabled = false;
+                applyBtn.setAttribute('aria-disabled', 'false');
+            }
             
             // 同步内容
             editorContent.value = previewContent.textContent;
             
-            // 计算并设置最佳高度
+            // 绑定自动增高事件
+            if (!editorContent.dataset.autosizeBound) {
+                editorContent.addEventListener('input', () => {
+                    try {
+                        if (editorContent.classList.contains('fixed-lines')) {
+                            // 固定行：由外层容器滚动，文本域不滚动
+                            editorContent.style.overflowY = 'hidden';
+                            editorContent.style.height = 'auto';
+                            editorContent.style.height = editorContent.scrollHeight + 'px';
+                        } else if (typeof deckManager !== 'undefined' && typeof deckManager.autosizeTextArea === 'function') {
+                            deckManager.autosizeTextArea(editorContent);
+                        } else {
+                            editorContent.style.overflowY = 'hidden';
+                            editorContent.style.height = 'auto';
+                            editorContent.style.height = editorContent.scrollHeight + 'px';
+                        }
+                    } catch (e) {}
+                });
+                editorContent.dataset.autosizeBound = 'true';
+            }
+
+            // 切换时同步滚动位置，避免用户感知差异
+            syncScrollPosition();
+            // 初始计算并设置最佳高度
             calculateOptimalHeight();
             
             // 同步滚动位置
@@ -874,6 +1033,10 @@ updateHiddenButtonState() {
             toggleBtn.textContent = "编辑模式";
             toggleBtn.classList.remove("bg-secondary");
             toggleBtn.classList.add("bg-primary");
+            if (applyBtn) {
+                applyBtn.disabled = true;
+                applyBtn.setAttribute('aria-disabled', 'true');
+            }
             
             // 同步滚动位置
             setTimeout(syncScrollPosition, 0);
@@ -890,11 +1053,26 @@ updateHiddenButtonState() {
         window.removeEventListener("resize", handleResize);
         window.addEventListener("resize", handleResize);
     },
+
+    // 文本域自动增高，消除内部滚动，统一滚动到外层容器
+    autosizeTextArea(el) {
+        if (!el) return;
+        const prevScroll = el.scrollTop;
+        el.style.overflowY = 'hidden';
+        el.style.height = 'auto';
+        el.style.height = el.scrollHeight + 'px';
+        el.scrollTop = prevScroll;
+    },
     
     // 应用JSON编辑的更改
     applyJsonChanges() {
         const editorContent = document.getElementById("jsonEditor");
         if (!editorContent) return false;
+        // 非编辑态时阻止应用，避免误操作
+        if (!this.editMode) {
+            this.showNotification("请先进入编辑模式再应用更改", "warning");
+            return false;
+        }
         
         try {
             const jsonText = editorContent.value.trim();
@@ -902,10 +1080,41 @@ updateHiddenButtonState() {
                 throw new Error("JSON内容不能为空");
             }
             
+            // 在解析前粗略扫描键名，检测文本中是否有重复的顶层牌堆名（忽略隐藏前缀"_"）
+            // 说明：JSON.parse 会保留最后一个同名键，导致重复键无法被检测到，因此先从文本层面粗略检查。
+            const keyRegex = /"([^"\\]*(?:\\.[^"\\]*)*)"\s*:/g;
+            const rawKeys = [];
+            let m;
+            while ((m = keyRegex.exec(jsonText)) !== null) {
+                rawKeys.push(m[1]);
+            }
+            const normalizeName = (name) => name.trim().replace(/^_/, "");
+            const seenPreParse = new Set();
+            const dupPreParse = new Set();
+            rawKeys.forEach(k => {
+                const n = normalizeName(k);
+                if (seenPreParse.has(n)) dupPreParse.add(n); else seenPreParse.add(n);
+            });
+            if (dupPreParse.size > 0) {
+                throw new Error("检测到重复的牌堆名（忽略隐藏前缀_）：" + Array.from(dupPreParse).join(", "));
+            }
+
             const parsedData = JSON.parse(jsonText);
             
             if (typeof parsedData !== "object" || parsedData === null || Array.isArray(parsedData)) {
                 throw new Error("无效的牌堆格式，必须是JSON对象");
+            }
+
+            // 解析后再次验证：隐藏与非隐藏之间是否重名（忽略前缀"_"）
+            const deckKeys = Object.keys(parsedData);
+            const seenPostParse = new Set();
+            const dupPostParse = new Set();
+            deckKeys.forEach(k => {
+                const n = normalizeName(k);
+                if (seenPostParse.has(n)) dupPostParse.add(n); else seenPostParse.add(n);
+            });
+            if (dupPostParse.size > 0) {
+                throw new Error("存在隐藏与非隐藏重名的牌堆：" + Array.from(dupPostParse).join(", "));
             }
             
             this.decks = parsedData;
@@ -928,7 +1137,7 @@ updateHiddenButtonState() {
             
             this.showNotification("JSON数据已更新");
             this.toggleEditMode();
-            
+
             return true;
         } catch (e) {
             this.showNotification("JSON解析错误: " + e.message, "error");
@@ -1382,6 +1591,8 @@ updateHiddenButtonState() {
     // 显示通知
     showNotification(message, type = "success") {
         const notification = document.createElement("div");
+        // 若处于原生全屏，通知需插入到全屏元素内部（顶层）
+        const host = document.fullscreenElement || document.body;
         
         let bgColor, textColor, icon;
         
@@ -1414,8 +1625,10 @@ updateHiddenButtonState() {
         
         notification.className = "fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg " + bgColor + " " + textColor + " flex items-center z-50 transform translate-y-10 opacity-0 transition-all duration-300";
         notification.innerHTML = '<i class="fa ' + icon + ' mr-2"></i> ' + message;
+        // 提升层级，确保在样式/原生全屏覆盖层之上可见
+        notification.style.zIndex = '2147483647';
         
-        document.body.appendChild(notification);
+        host.appendChild(notification);
         
         setTimeout(() => {
             notification.classList.remove("translate-y-10", "opacity-0");
@@ -1424,7 +1637,9 @@ updateHiddenButtonState() {
         setTimeout(() => {
             notification.classList.add("translate-y-10", "opacity-0");
             setTimeout(() => {
-                document.body.removeChild(notification);
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
             }, 300);
         }, 3000);
     },
@@ -1493,9 +1708,12 @@ updateHiddenButtonState() {
                 // 调整内部容器高度
                 if (!previewContainer.classList.contains("hidden")) {
                     previewContainer.style.maxHeight = "calc(100vh - 60px)";
+                    previewContainer.style.width = '100%';
                 }
                 if (!editorContainer.classList.contains("hidden")) {
                     editorContainer.style.maxHeight = "calc(100vh - 60px)";
+                    // 清除可能存在的旧像素宽度并强制全屏下自适应
+                    editorContainer.style.width = '100%';
                 }
                 
                 toggleBtn.innerHTML = '<i class="fa fa-compress mr-1"></i>退出全屏';
@@ -1512,6 +1730,8 @@ updateHiddenButtonState() {
                     </div>
                 `;
                 document.body.appendChild(fullscreenToolbar);
+                // 提升工具栏层级，避免被容器遮挡
+                fullscreenToolbar.style.zIndex = '10000';
                 
                 // 退出全屏按钮事件
                 fullscreenToolbar.querySelector("#exitFullscreenBtn").addEventListener("click", () => {
@@ -1554,7 +1774,9 @@ updateHiddenButtonState() {
                     
                     // 恢复预览和编辑区域样式
                     previewContainer.style.maxHeight = this.jsonOriginalStyles.preview.maxHeight;
+                    previewContainer.style.width = '';
                     editorContainer.style.maxHeight = this.jsonOriginalStyles.editor.maxHeight;
+                    editorContainer.style.width = '';
                     
                     // 清除保存的样式
                     this.jsonOriginalStyles = null;
@@ -1589,6 +1811,93 @@ function debounce(fn, delay = 250) {
         t = setTimeout(() => fn.apply(this, args), delay);
     };
 }
+
+// 通用元素全屏切换（优先使用原生 Fullscreen API）
+function toggleElementFullscreen(el, toggleBtn) {
+    if (!el) return;
+    if (!document.fullscreenElement) {
+        el.requestFullscreen().then(() => {
+            if (toggleBtn) toggleBtn.innerHTML = '<i class="fa fa-compress mr-1"></i>退出全屏';
+        }).catch(err => {
+            console.warn('进入原生全屏失败，使用样式回退:', err);
+            if (typeof deckManager !== 'undefined' && deckManager.toggleJsonFullscreen) {
+                deckManager.toggleJsonFullscreen();
+            }
+        });
+    } else {
+        document.exitFullscreen().then(() => {
+            if (toggleBtn) toggleBtn.innerHTML = '<i class="fa fa-expand mr-1"></i>全屏';
+        }).catch(err => {
+            console.warn('退出原生全屏失败，使用样式回退:', err);
+            if (typeof deckManager !== 'undefined' && deckManager.fullscreenJson) {
+                deckManager.toggleJsonFullscreen();
+            }
+        });
+    }
+}
+
+// 根据原生全屏状态更新按钮文案，同时仅在全屏时调整编辑/预览高度
+document.addEventListener('fullscreenchange', () => {
+    const toggleBtn = document.getElementById('toggleFullscreenBtn');
+    if (toggleBtn) {
+        toggleBtn.innerHTML = document.fullscreenElement
+            ? '<i class="fa fa-compress mr-1"></i>退出全屏'
+            : '<i class="fa fa-expand mr-1"></i>全屏';
+    }
+
+    const jsonContainer = document.querySelector('.json-container');
+    const previewContainer = document.getElementById('jsonPreviewContainer');
+    const editorContainer = document.getElementById('jsonEditorContainer');
+    const editorInner = editorContainer ? editorContainer.querySelector('div') : null;
+    const editorTextArea = document.getElementById('jsonEditor');
+
+    if (document.fullscreenElement === jsonContainer) {
+        if (previewContainer) {
+            previewContainer.style.maxHeight = 'calc(100vh - 60px)';
+            previewContainer.style.overflowY = 'auto';
+            previewContainer.style.width = '100%';
+        }
+        // 让整个编辑容器可滚动，以确保“应用更改”按钮始终可见
+        if (editorContainer) {
+            editorContainer.style.maxHeight = 'calc(100vh - 60px)';
+            editorContainer.style.overflowY = 'auto';
+            // 清除旧像素宽度并强制自适应
+            editorContainer.style.width = '100%';
+        }
+        // 保持输入区域高度舒适
+        if (editorInner) {
+            editorInner.style.maxHeight = '';
+            editorInner.style.overflowY = '';
+        }
+        if (editorTextArea) {
+            if (editorTextArea.classList.contains('fixed-lines')) {
+                // 固定 13 行模式下，全屏时也保持由容器滚动
+                editorTextArea.style.overflowY = 'auto';
+                editorTextArea.style.height = '100%';
+            } else {
+                // 统一由外层容器滚动，文本域自动增高以适配内容
+                editorTextArea.style.overflowY = 'hidden';
+                editorTextArea.style.height = 'auto';
+                try {
+                    editorTextArea.style.height = editorTextArea.scrollHeight + 'px';
+                } catch (e) {}
+            }
+        }
+    } else {
+        if (previewContainer) previewContainer.style.maxHeight = '';
+        if (previewContainer) previewContainer.style.width = '';
+        if (editorContainer) {
+            editorContainer.style.maxHeight = '';
+            editorContainer.style.overflowY = '';
+            editorContainer.style.width = '';
+        }
+        if (editorInner) editorInner.style.maxHeight = '';
+        if (editorTextArea) {
+            editorTextArea.style.height = '';
+            editorTextArea.style.overflowY = '';
+        }
+    }
+});
 
 // 绑定事件监听器
 function bindEventListeners() {
@@ -1839,7 +2148,11 @@ function bindEventListeners() {
         jsonEditor.addEventListener("keydown", (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === "s") {
                 e.preventDefault();
-                deckManager.applyJsonChanges();
+                if (deckManager.editMode) {
+                    deckManager.applyJsonChanges();
+                } else {
+                    deckManager.showNotification("请先进入编辑模式再应用更改", "warning");
+                }
             }
         });
     }
@@ -1852,17 +2165,20 @@ function bindEventListeners() {
         });
     }
     
-    // JSON全屏切换（修复版）
+    // JSON全屏切换（优先原生全屏，失败回退样式）
     const toggleFullscreenBtn = document.getElementById("toggleFullscreenBtn");
     if (toggleFullscreenBtn) {
         toggleFullscreenBtn.addEventListener("click", () => {
-            // 确保在尝试全屏前已初始化
-            if (typeof deckManager !== 'undefined' && deckManager.toggleJsonFullscreen) {
+            const jsonContainer = document.querySelector('.json-container');
+            if (jsonContainer) {
+                toggleElementFullscreen(jsonContainer, toggleFullscreenBtn);
+            } else if (typeof deckManager !== 'undefined' && deckManager.toggleJsonFullscreen) {
                 deckManager.toggleJsonFullscreen();
             } else {
                 console.error("全屏功能尚未初始化");
-                // 显示用户友好的错误提示
-                deckManager.showNotification("全屏功能暂时无法使用，请稍后重试或刷新页面", "error");
+                if (typeof deckManager !== 'undefined' && deckManager.showNotification) {
+                    deckManager.showNotification("全屏功能暂时无法使用，请稍后重试或刷新页面", "error");
+                }
             }
         });
     }
@@ -1998,6 +2314,100 @@ function bindEventListeners() {
                 if (e.altKey && e.key.toLowerCase() === 'r') {
                     e.preventDefault();
                     quickReferenceBtn.click();
+                }
+            });
+        }
+    }
+
+    // 移动端悬浮按钮及子菜单
+    const fabContainer = document.getElementById('mobileFab');
+    const fabMainBtn = document.getElementById('fabMainBtn');
+    const fabImportBtn = document.getElementById('fabImportBtn');
+    const fabExportBtn = document.getElementById('fabExportBtn');
+    const fabSaveBtn = document.getElementById('fabSaveBtn');
+    const fabClearBtn = document.getElementById('fabClearBtn');
+
+    if (fabContainer && fabMainBtn) {
+        const closeFab = () => {
+            if (!fabContainer.classList.contains('open')) return;
+            // 执行收回动画：添加 closing 状态但暂不移除 open
+            fabContainer.classList.add('closing');
+            fabContainer.setAttribute('aria-expanded', 'false');
+            // 等待动画结束后移除 open/closing
+            setTimeout(() => {
+                fabContainer.classList.remove('open');
+                fabContainer.classList.remove('closing');
+            }, 180);
+        };
+
+        const openFab = () => {
+            fabContainer.classList.add('open');
+            fabContainer.classList.remove('closing');
+            fabContainer.setAttribute('aria-expanded', 'true');
+        };
+
+        // 主按钮点击：展开或收回
+        fabMainBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (fabContainer.classList.contains('open')) {
+                closeFab();
+            } else {
+                openFab();
+            }
+        });
+
+        // 点击外部区域关闭，但在与FAB相关的弹窗内操作不关闭（导入、清除确认）
+        document.addEventListener('click', (e) => {
+            if (!fabContainer.classList.contains('open')) return;
+
+            const clickedInsideFab = fabContainer.contains(e.target);
+            const importModal = document.getElementById('importModal');
+            const importModalActive = importModal && !importModal.classList.contains('hidden') && importModal.contains(e.target);
+            const clearConfirmModal = document.getElementById('clearConfirmModal');
+            const clearModalActive = clearConfirmModal && clearConfirmModal.contains(e.target);
+
+            // 在FAB本体、导入弹窗、清除确认弹窗内点击时不收回
+            if (clickedInsideFab || importModalActive || clearModalActive) return;
+
+            closeFab();
+        });
+
+        // 导入 - 复用现有导入按钮逻辑
+        if (fabImportBtn) {
+            fabImportBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const importBtn = document.getElementById('importBtn');
+                if (importBtn) importBtn.click();
+            });
+        }
+
+        // 导出
+        if (fabExportBtn) {
+            fabExportBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (typeof deckManager !== 'undefined' && deckManager.exportJson) {
+                    deckManager.exportJson();
+                }
+            });
+        }
+
+        // 保存（同步预览内容为最新，并提示）
+        if (fabSaveBtn) {
+            fabSaveBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (typeof deckManager !== 'undefined') {
+                    deckManager.updateJsonPreview();
+                    deckManager.showNotification('已保存当前编辑');
+                }
+            });
+        }
+
+        // 清除所有牌堆（带二次确认弹窗）
+        if (fabClearBtn) {
+            fabClearBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (typeof deckManager !== 'undefined' && deckManager.clearAllDecks) {
+                    deckManager.clearAllDecks();
                 }
             });
         }

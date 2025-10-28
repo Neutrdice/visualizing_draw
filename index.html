@@ -13,6 +13,7 @@
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js" defer></script>
+    <link rel="stylesheet" href="./css/style.css">
     <script>
         tailwind.config = {
             theme: {
@@ -94,23 +95,23 @@
         <div class="bg-yellow-50 text-yellow-800 text-center p-2">本页面需要启用 JavaScript 才能正常使用。</div>
     </noscript>
     <header class="bg-white shadow-md fixed w-full z-10">
-        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center flex-wrap gap-2">
             <div class="flex items-center space-x-2">
                 <i class="fa fa-th-large text-primary text-2xl"></i>
                 <h1 class="text-xl font-bold text-primary">牌堆生成编辑器</h1>
             </div>
-            <div class="flex space-x-3">
-                <button id="importBtn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md flex items-center transition-colors">
+            <div id="headerActions" class="flex flex-wrap gap-2 sm:gap-3 justify-end">
+                <button id="importBtn" class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-200 hover:bg-gray-300 rounded-md flex items-center transition-colors">
                     <i class="fa fa-upload mr-2"></i>导入
                 </button>
-                <button id="exportBtn" class="px-4 py-2 bg-secondary text-white hover:bg-secondary/90 rounded-md flex items-center transition-colors">
+                <button id="exportBtn" class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-secondary text-white hover:bg-secondary/90 rounded-md flex items-center transition-colors">
                     <i class="fa fa-download mr-2"></i>导出
                 </button>
-                <button id="saveBtn" class="px-4 py-2 bg-primary text-white hover:bg-primary/90 rounded-md flex items-center transition-colors">
+                <button id="saveBtn" class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-primary text-white hover:bg-primary/90 rounded-md flex items-center transition-colors">
                     <i class="fa fa-save mr-2"></i>保存
                 </button>
                 <!-- 添加清除按钮 -->
-                <button id="clearAllBtn" class="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-md flex items-center transition-colors">
+                <button id="clearAllBtn" class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-red-600 text-white hover:bg-red-700 rounded-md flex items-center transition-colors">
                     <i class="fa fa-trash mr-2"></i>清除
                 </button>
             </div>
@@ -118,7 +119,7 @@
     </header>
 
     <!-- 主内容区 -->
-    <main class="container mx-auto px-4 pt-24 pb-10">
+    <main class="container mx-auto px-4 pt-20 sm:pt-24 pb-10">
         <!-- 工具栏 -->
         <div class="bg-white rounded-lg shadow-sm p-3 mb-4 flex flex-wrap gap-2">
             <button id="newDeckBtn" class="px-3 py-1.5 bg-primary/10 text-primary rounded-md hover:bg-primary/20 transition-colors text-sm">
@@ -162,17 +163,17 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div class="lg:col-span-1 space-y-4">
                 <div class="bg-white rounded-lg shadow-sm p-4">
                     <div class="flex justify-between items-center mb-3">
-                        <h2 class="font-semibold text-lg">牌堆列表</h2>
+                        <h2 class="font-semibold text-base sm:text-lg">牌堆列表</h2>
                         <div class="relative">
                             <input type="text" id="deckSearch" placeholder="搜索牌堆..." class="pl-8 pr-3 py-1 border border-gray-300 rounded-md text-sm w-full focus:outline-none focus:ring-2 focus:ring-primary/50">
                             <i class="fa fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
                         </div>
                     </div>
-                    <div id="deckList" class="max-h-[calc(100vh-320px)] overflow-y-auto space-y-1.5 content-auto">
+                    <div id="deckList" class="max-h-[calc(100vh-280px)] sm:max-h-[calc(100vh-300px)] lg:max-h-[calc(100vh-320px)] overflow-y-auto space-y-1.5 content-auto">
                     </div>
                 </div>
 
@@ -185,7 +186,7 @@
                         </div>
                         <div>
                             <label class="block text-sm text-gray-600 mb-1">牌面数量</label>
-                            <input type="number" id="cardCountDisplay" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 cursor-not-allowed" value="0" readonly>
+                            <input type="number" id="cardCountDisplay" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 cursor-not-allowed" value="0" readonly="">
                         </div>
                     </div>
                 </div>
@@ -193,7 +194,7 @@
 
             <div class="lg:col-span-1 bg-white rounded-lg shadow-sm p-4">
                 <div class="flex justify-between items-center mb-3">
-                    <h2 class="font-semibold text-lg">牌面编辑</h2>
+                    <h2 class="font-semibold text-base sm:text-lg">牌面编辑</h2>
                     <div class="flex space-x-2">
                         <button id="moveUpBtn" class="p-1.5 bg-gray-100 rounded hover:bg-gray-200 transition-colors" aria-label="上移选中牌面">
                             <i class="fa fa-arrow-up"></i>
@@ -203,33 +204,33 @@
                         </button>
                     </div>
                 </div>
-                <div id="cardsEditor" class="space-y-3 max-h-[calc(100vh-320px)] overflow-y-auto pb-4 content-auto">
+                <div id="cardsEditor" class="space-y-3 max-h-[calc(100vh-280px)] sm:max-h-[calc(100vh-300px)] lg:max-h-[calc(100vh-320px)] overflow-y-auto pb-4 content-auto">
                 </div>
             </div>
 
             <div class="lg:col-span-1 space-y-4">
-                <div class="bg-white rounded-lg shadow-sm p-4">
+                <div class="bg-white rounded-lg shadow-sm p-2 sm:p-4 json-container">
                     <div class="flex justify-between items-center mb-3">
-                        <h2 class="font-semibold text-lg">JSON数据</h2>
+                        <h2 class="font-semibold text-base sm:text-lg">JSON数据</h2>
                         <div class="flex space-x-2">
-                            <button id="toggleEditModeBtn" class="px-3 py-1.5 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors text-sm">
+                            <button id="toggleEditModeBtn" class="px-3 py-1.5 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors text-xs sm:text-sm">
                                 编辑模式
                             </button>
-                            <button id="toggleFullscreenBtn" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm">
+                            <button id="toggleFullscreenBtn" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-xs sm:text-sm">
                                 <i class="fa fa-expand mr-1"></i>全屏
                             </button>
                         </div>
                     </div>
                     
-                    <div id="jsonPreviewContainer" class="bg-gray-900 text-gray-100 p-3 rounded-md text-sm font-mono overflow-x-auto max-h-[calc(50vh-200px)] json-editor-content content-auto">
+                    <div id="jsonPreviewContainer" class="bg-gray-900 text-gray-100 p-0 rounded-md text-xs sm:text-sm font-mono overflow-x-hidden max-h-[calc(50vh-180px)] sm:max-h-[calc(50vh-200px)] md:max-h-[calc(50vh-220px)] lg:max-h-[calc(50vh-200px)] json-editor-content content-auto">
                         <pre id="jsonPreview"></pre>
                     </div>
-                    <div id="jsonEditorContainer" class="hidden">
-                        <div class="bg-gray-900 text-gray-100 p-3 rounded-md overflow-x-auto max-h-[calc(50vh-260px)]">
-                            <textarea id="jsonEditor" class="w-full h-full bg-transparent border-none focus:outline-none resize-none json-editor-content"></textarea>
+                    <div id="jsonEditorContainer" class="hidden overflow-y-hidden flex flex-col">
+                        <div class="bg-gray-900 text-gray-100 p-0 rounded-md overflow-x-hidden overflow-y-auto text-xs sm:text-sm font-mono json-editor-content flex-1 min-h-0 max-h-[calc(50vh-180px)] sm:max-h-[calc(50vh-200px)] md:max-h-[calc(50vh-220px)] lg:max-h-[calc(50vh-200px)]">
+            <textarea id="jsonEditor" class="w-full bg-transparent border-none focus:outline-none resize-none json-editor-content fixed-lines" wrap="soft"></textarea>
                         </div>
                         <div class="mt-2 flex justify-end">
-                            <button id="applyJsonChangesBtn" class="px-3 py-1.5 bg-secondary text-white rounded-md hover:bg-secondary/90 transition-colors text-sm">
+                            <button id="applyJsonChangesBtn" class="px-3 py-1.5 bg-secondary text-white rounded-md hover:bg-secondary/90 transition-colors text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled aria-disabled="true">
                                 应用更改
                             </button>
                         </div>
@@ -238,11 +239,11 @@
 
                 <div class="bg-white rounded-lg shadow-sm p-4">
                     <div class="flex flex-wrap justify-between items-center mb-3 gap-2">
-                        <h2 class="font-semibold text-lg">抽取预览</h2>
+                        <h2 class="font-semibold text-base sm:text-lg">抽取预览</h2>
                         <div class="flex items-center space-x-2">
-                            <select id="drawDeckSelector" class="px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                            <select id="drawDeckSelector" class="px-2 py-1.5 border border-gray-300 rounded-md text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
                             </select>
-                            <button id="drawCardBtn" class="px-3 py-1.5 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors text-sm">
+                            <button id="drawCardBtn" class="px-3 py-1.5 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors text-xs sm:text-sm">
                                 <i class="fa fa-random mr-1"></i>抽取牌面
                             </button>
                         </div>
@@ -256,8 +257,8 @@
                 </div>
 
                 <div class="bg-white rounded-lg shadow-sm p-4">
-                    <h2 class="font-semibold text-lg mb-3">概率分布</h2>
-                    <div class="h-[200px]">
+                    <h2 class="font-semibold text-base sm:text-lg mb-3">概率分布</h2>
+                    <div class="h-[160px] sm:h-[180px] md:h-[200px]">
                         <canvas id="probabilityChart"></canvas>
                     </div>
                 </div>
@@ -294,6 +295,30 @@
     </div>
 
     <script src="./js/main.js" defer></script>
+    <!-- 移动端悬浮操作按钮 -->
+    <div id="mobileFab" class="fab-container" aria-label="快速操作" aria-expanded="false">
+        <div class="fab-menu" aria-hidden="true">
+            <button id="fabImportBtn" class="fab-option" title="导入" aria-label="导入">
+                <i class="fa fa-upload"></i>
+            </button>
+            <button id="fabExportBtn" class="fab-option" title="导出" aria-label="导出">
+                <i class="fa fa-download"></i>
+            </button>
+            <button id="fabSaveBtn" class="fab-option" title="保存" aria-label="保存">
+                <i class="fa fa-save"></i>
+            </button>
+            <button id="fabClearBtn" class="fab-option" title="清除" aria-label="清除">
+                <i class="fa fa-trash"></i>
+            </button>
+        </div>
+        <button id="fabMainBtn" class="fab-main" aria-label="展开操作">
+            <!-- 用户指定的SVG Logo -->
+            <svg t="1761635457925" class="icon" viewBox="0 0 1228 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1635" width="28" height="28">
+                <path d="M146.768232 246.98861l390.959748 180.913879 81.854559-300.502809L146.768232 246.98861zM768.303458 297.969592c-41.059218 27.443179-83.121167 58.422306-128.930165 98.214916-17.67974 15.4104-33.617894 30.556924-47.920013 45.386795l-16.254806-4.169252 80.218523-295.964129 112.886461 156.53167zM790.205226 763.764779l-158.326032 221.761995-25.543267-186.613616c67.710766-4.010926 128.771839-16.254806 183.869299-35.148379zM468.645055 721.069525l-100.484255 191.7856c-115.155801-37.734371-229.889399-75.099315-231.472659-74.729887-3.113745 0.738855 396.659486-352.750399 396.659486-352.750399l3.008194 22.060094c-88.345926 123.969283-67.710766 213.634593-67.710766 213.634592zM602.430552 989.959903s-81.643457-26.915425-176.586301-58.105654c47.022832-36.151111 102.225841-79.901871 151.88744-122.386022l24.698861 180.491676zM591.400505 1014.289337l-276.91223 6.91357-172.5226-155.898366c1.899912 0.738855 106.289543 35.35948 213.89847 71.035613l-41.37587 78.951914s35.834459-25.912694 86.076586-64.174818c100.009277 33.142916 190.835644 63.172087 190.835644 63.172087zM867.098902 731.466268l-78.107509 168.986652-139.115807 89.506983 168.617224-236.591867c16.782559-6.649693 32.98459-13.985466 48.606092-21.901768zM99.692625 301.980518L2.849869 618.421481l91.248569 174.528063 5.594187-490.969026zM118.638973 273.85126l0.791631 529.23115L510.337577 457.351131 118.638973 273.85126z" fill="#5A67AF" p-id="1636"></path>
+                <path d="M1225.179611 8.49683s-79.321342 136.688141-279.234345 266.462712c-44.014637 58.26398-49.925475 128.244086-49.925475 128.244086l-9.552338-88.1876s-154.367881 80.060197-173.050353 90.720817c-16.940885 30.6097 3.588723 10.502293-32.087409 111.619852-3.008195-20.318507-7.7052-56.627944-6.491367-80.535175-18.260269 6.596918-178.380663 180.597227-163.920219 281.873113 40.637015-36.626089 97.528836-128.296861 230.628254-183.183219 133.152193-54.886358 220.548163-68.555172 411.383806-377.502036 0 0-84.44055 263.032315-385.787764 392.859661-230.786579 90.034737-365.09983 361.933309-365.09983 361.933309s80.165748-70.982838 163.392465-158.273257c33.301242-0.105551 71.246714 0.686079 164.606298-19.157449-23.273927-14.935422-38.051023-28.762562-38.051023-28.762563s190.149565 66.602484 393.176313-268.995928l-70.982838-9.763439 101.170334-45.386796s118.638973-277.809411 109.825491-373.966088z" fill="#5A67AF" p-id="1637"></path>
+            </svg>
+        </button>
+    </div>
 </body>
 </html>
     

@@ -13,6 +13,13 @@
     --light-gray: #e2e8f0;
     --border-radius: 6px;
     --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    /* 响应式间距与字体尺寸变量 */
+    --space-1: clamp(6px, 0.6vw, 10px);
+    --space-2: clamp(8px, 0.8vw, 14px);
+    --space-3: clamp(12px, 1.2vw, 18px);
+    --font-size-base: clamp(14px, 0.9vw + 12px, 17px);
+    --font-size-xs: clamp(0.8rem, 0.84rem, 0.9rem);
+    --font-size-sm: clamp(0.9rem, 0.96rem, 1.05rem);
 }
 
 * {
@@ -129,20 +136,6 @@ body {
     gap: 0.5rem;
 }
 
-#deckNameInput {
-    font-size: 1.25rem;
-    font-weight: 600;
-    border: none;
-    border-bottom: 2px solid transparent;
-    background: transparent;
-    padding: 0.25rem 0;
-    width: 250px;
-}
-
-#deckNameInput:focus {
-    outline: none;
-    border-bottom-color: var(--primary);
-}
 
 .hidden-checkbox {
     display: flex;
@@ -157,13 +150,7 @@ body {
     font-size: 0.9rem;
 }
 
-#cardCountDisplay {
-    width: 40px;
-    text-align: center;
-    border: none;
-    background: transparent;
-    color: var(--secondary);
-}
+/* 保留 Tailwind 输入样式，避免旧ID选择器覆盖 */
 
 .editor-toolbar {
     display: flex;
@@ -242,6 +229,40 @@ body {
     position: relative;
 }
 
+/* JSON 预览优化：更小字体、自动换行、统一容器高度 */
+#jsonPreviewContainer {
+    font-size: 0.8125rem; /* 桌面略小字号 */
+    min-height: 220px; /* 统一显示框基准高度 */
+}
+#jsonEditorContainer {
+    min-height: 220px; /* 与预览容器保持一致 */
+}
+#jsonPreview {
+    display: block;
+    margin: 0;
+    padding: 0.5rem 0.75rem;    /* 与 #jsonEditor 一致的内边距 */
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.875rem;        /* 明确覆盖容器 text-xs/sm 差异 */
+    line-height: 1.5;
+    white-space: pre-wrap;      /* 保留缩进同时自动换行 */
+    word-break: break-word;     /* 打断长单词/键值避免横向滚动 */
+    overflow-wrap: anywhere;    /* 进一步确保不出现水平滚动 */
+    tab-size: 4;                /* 与编辑器统一制表宽度 */
+}
+
+#jsonEditor {
+    font-size: 0.875rem;        /* 与 #jsonPreview 明确一致 */
+    line-height: 1.5;           /* 与 #jsonPreview 明确一致 */
+    font-family: 'Consolas', 'Monaco', monospace;
+    white-space: pre-wrap;      /* 与预览一致的换行策略 */
+    word-break: break-word;     /* 尽量避免横向滚动 */
+    overflow-wrap: anywhere;    /* 长键值也可断行 */
+    overflow-x: hidden;         /* 禁止水平滚动 */
+    overflow-y: hidden;         /* 由内层容器承担纵向滚动，避免双滚动条 */
+    padding: 0.5rem 0.75rem;    /* 增加内边距，避免文本贴边 */
+    tab-size: 4;                /* 与预览统一制表宽度 */
+}
+
 .json-container {
     background-color: #1e293b;
     color: #f8fafc;
@@ -275,6 +296,47 @@ body {
     font-size: 0.85rem;
     padding: 1rem;
     resize: none;
+}
+
+/* ========== Move Up/Down Elastic Animations ========== */
+@keyframes spring-up {
+  0% { transform: translateY(0) scale(1); }
+  20% { transform: translateY(-12px) scale(1.01); }
+  60% { transform: translateY(4px) scale(0.998); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+@keyframes spring-down {
+  0% { transform: translateY(0) scale(1); }
+  20% { transform: translateY(12px) scale(1.01); }
+  60% { transform: translateY(-4px) scale(0.998); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+.anim-spring-up {
+  animation: spring-up 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.anim-spring-down {
+  animation: spring-down 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+/* FLIP: 为牌堆列表过渡提供基础过渡曲线 */
+.flip-animate {
+  transition: transform 260ms cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-spring-up,
+  .anim-spring-down,
+  .flip-animate {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
 }
 
 .json-editor textarea:focus {
@@ -494,5 +556,252 @@ body {
         align-items: flex-start;
         gap: 0.5rem;
     }
+}
+
+/* 移动端悬浮操作按钮 */
+.fab-container {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    z-index: 10050; /* 高于全屏工具栏，低于通知 */
+}
+
+/* 仅在小屏幕显示 */
+/* 桌面端隐藏（宽度>=1025px），平板和手机显示 */
+@media (min-width: 1025px) {
+    .fab-container { display: none; }
+}
+
+.fab-main {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background-color: #fff;
+    border: 1px solid var(--light-gray);
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.fab-main .icon {
+    display: block;
+    width: 36px;
+    height: 36px;
+}
+
+.fab-menu {
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* 保证子按钮与主按钮中心对齐 */
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+/* 关闭状态不占空间且不拦截点击 */
+.fab-container:not(.open) .fab-menu {
+    height: 0;
+    margin-bottom: 0;
+    pointer-events: none;
+}
+
+.fab-option {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background-color: #fff;
+    border: 1px solid var(--light-gray);
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(10px) scale(0.92);
+    pointer-events: none;
+}
+
+/* 颜色区分各操作按钮 */
+#fabImportBtn { background-color: var(--info); color: #fff; }
+#fabExportBtn { background-color: var(--secondary); color: #fff; }
+#fabSaveBtn   { background-color: var(--primary); color: #fff; }
+#fabClearBtn  { background-color: var(--danger); color: #fff; }
+
+#fabImportBtn:hover { filter: brightness(0.95); }
+#fabExportBtn:hover { filter: brightness(0.95); }
+#fabSaveBtn:hover   { filter: brightness(0.95); }
+#fabClearBtn:hover  { filter: brightness(0.95); }
+
+.fab-container.open .fab-option {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+    animation: fabPopIn 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* 轻微的阶梯动画效果 */
+.fab-container.open #fabImportBtn { animation-delay: 0.02s; }
+.fab-container.open #fabExportBtn { animation-delay: 0.05s; }
+.fab-container.open #fabSaveBtn   { animation-delay: 0.08s; }
+.fab-container.open #fabClearBtn  { animation-delay: 0.11s; }
+
+/* 收回动画（在 open + closing 状态下运行） */
+.fab-container.open.closing .fab-option {
+    animation: fabPopOut 160ms ease both;
+}
+.fab-container.open.closing #fabImportBtn { animation-delay: 0.00s; }
+.fab-container.open.closing #fabExportBtn { animation-delay: 0.02s; }
+.fab-container.open.closing #fabSaveBtn   { animation-delay: 0.04s; }
+.fab-container.open.closing #fabClearBtn  { animation-delay: 0.06s; }
+
+@keyframes fabPopIn {
+    0%   { opacity: 0; transform: translateY(10px) scale(0.86); }
+    60%  { opacity: 1; transform: translateY(0)    scale(1.06); }
+    100% { opacity: 1; transform: translateY(0)    scale(1.00); }
+}
+
+@keyframes fabPopOut {
+    0%   { opacity: 1; transform: translateY(0)    scale(1.00); }
+    100% { opacity: 0; transform: translateY(10px) scale(0.86); }
+}
+
+/* 手机和平板端隐藏头部的导入/导出/保存/清除按钮 div，避免重复显示 */
+@media (max-width: 1024px) {
+    #headerActions { display: none; }
+}
+
+/* ----------------------------- */
+/* 移动端整体布局与排版优化       */
+/* ----------------------------- */
+
+/* 栅格容器：在任意分辨率下整齐排布 */
+.grid {
+    display: grid;
+    grid-template-columns: 1fr; /* 移动端默认单列 */
+    gap: 1rem; /* 等同于 gap-4 */
+}
+
+@media (min-width: 768px) {
+    .grid {
+        grid-template-columns: repeat(2, 1fr); /* 平板两列 */
+    }
+}
+
+@media (min-width: 1025px) {
+    .grid {
+        grid-template-columns: repeat(3, 1fr); /* 桌面三列 */
+    }
+}
+
+/* h2 标题在移动端的字号与间距优化 */
+h2 {
+    font-size: 1.125rem; /* 18px */
+    line-height: 1.4;
+    margin-bottom: 0.5rem;
+}
+
+@media (max-width: 640px) {
+    h2 {
+        font-size: 1rem; /* 16px，移动端更紧凑 */
+        line-height: 1.4;
+        margin-bottom: 0.5rem;
+        word-break: break-word;
+    }
+}
+
+@media (min-width: 1025px) {
+    h2 {
+        font-size: 1.25rem; /* 20px 桌面更清晰 */
+    }
+}
+
+/* 输入框圆角矩形边框（移动端优先） */
+@media (max-width: 1024px) {
+    input[type="text"],
+    input[type="number"],
+    input[type="search"],
+    select,
+    textarea {
+        border: 1px solid var(--light-gray);
+        border-radius: 8px;
+        padding: 0.5rem 0.75rem;
+        box-sizing: border-box;
+        background-color: #fff;
+    }
+
+    /* 覆盖牌堆名称输入在移动端的无边框样式 */
+    #deckNameInput {
+        border: 1px solid var(--light-gray);
+        border-radius: 8px;
+        background-color: #fff;
+        padding: 0.5rem 0.75rem;
+        width: 100%;
+    }
+}
+
+/* 移动端代码编辑框最少显示7行 */
+/* 移动端保持与桌面一致的换行策略，避免行数不一致 */
+@media (max-width: 1024px) {
+    #jsonEditor {
+        min-height: calc(1.5em * 7);
+        line-height: 1.5;
+        font-size: 0.875rem;
+        white-space: pre-wrap;
+        overflow-x: hidden;
+        min-width: auto;
+    }
+}
+
+/* 预览区在移动端匹配编辑器的最小列宽 */
+@media (max-width: 1024px) {
+    #jsonPreview {
+        min-width: auto;
+        white-space: pre-wrap;
+    }
+}
+
+/* 统一最小行数（7行），其余高度由容器控制 */
+#jsonPreviewContainer,
+#jsonEditorContainer {
+    min-height: calc(1.5em * 7);
+}
+
+#jsonPreview {
+    min-height: calc(1.5em * 7);
+}
+
+#jsonEditor {
+    min-height: calc(1.5em * 7);
+}
+
+/* 保证代码内容列对齐（制表符宽度） */
+.json-editor-content {
+    tab-size: 4;
+}
+    
+/* 移除强制固定13行高度，改由黑色内层容器max-height + auto滚动控制 */
+    
+/* 全局流式字体与行高 */
+html { font-size: var(--font-size-base); }
+body { line-height: 1.6; }
+
+/* 在常用小字号场景下提升可读性 */
+.text-xs { font-size: var(--font-size-xs); }
+.text-sm { font-size: var(--font-size-sm); }
+
+/* 统一按钮与表单控件的最小触达高度（不覆盖具体内边距） */
+button.rounded-md,
+input.rounded-md,
+select.rounded-md,
+textarea.rounded-md {
+  min-height: clamp(36px, 4.5vh, 44px);
+}
+
+/* JSON 编辑/预览的等宽字体与字号在不同分辨率下更舒适 */
+.json-editor-content,
+#jsonPreview {
+  font-size: clamp(0.85rem, 0.92rem, 0.98rem);
+  line-height: 1.6;
 }
     
