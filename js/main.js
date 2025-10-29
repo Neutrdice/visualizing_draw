@@ -3401,6 +3401,30 @@ function bindEventListeners() {
   }
 })();
 
+// Announcements visibility: prefer desktop card on non-mobile devices even at narrow widths
+(() => {
+  const ensureAnnouncementVisibility = () => {
+    const desktopEl = document.getElementById('announcementCardDesktop');
+    const mobileEl = document.getElementById('announcementMobileContainer');
+    if (!desktopEl || !mobileEl) return;
+    const isWide = window.matchMedia('(min-width: 640px)').matches;
+    if (isWide) {
+      // Show desktop: remove hidden; hide mobile: add hidden
+      desktopEl.classList.remove('hidden');
+      mobileEl.classList.add('hidden');
+    } else {
+      desktopEl.classList.add('hidden');
+      mobileEl.classList.remove('hidden');
+    }
+  };
+
+  window.addEventListener('load', ensureAnnouncementVisibility);
+  window.addEventListener('resize', ensureAnnouncementVisibility);
+})();
+
+// Announcements visibility: show desktop card on wide screens or fine pointer devices
+/* Announcements visibility controlled by responsive classes in HTML (sm breakpoint). */
+
 // Mobile editor: cap visible area to the height of first 3 cards, allow scroll
 (() => {
   const limitMobileEditorViewport = () => {
