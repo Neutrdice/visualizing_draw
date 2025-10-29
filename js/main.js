@@ -3293,13 +3293,14 @@ function bindEventListeners() {
             closeFab();
         });
 
-        // 媒体库 - 复用桌面媒体库按钮逻辑
+        // 媒体库（移动端）：直接打开弹窗并渲染列表，避免间接触发导致兼容性问题
         if (fabMediaBtn) {
             fabMediaBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                const mediaBtn = document.getElementById('mediaBtn');
-                if (mediaBtn) {
-                    mediaBtn.click();
+                const mediaModalEl = document.getElementById('mediaModal');
+                if (mediaModalEl) {
+                    mediaModalEl.classList.remove('hidden');
+                    try { await deckManager.renderMediaList(); } catch (err) { console.error(err); }
                     // 打开媒体库后收回悬浮菜单，避免遮挡弹窗
                     closeFab();
                 }
