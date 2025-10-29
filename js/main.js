@@ -2000,9 +2000,18 @@ updateHiddenButtonState() {
                 jsonContainer.style.margin = "0";
                 jsonContainer.style.borderRadius = "0";
                 jsonContainer.style.padding = "20px";
-                jsonContainer.style.backgroundColor = "#fff";
+                jsonContainer.style.backgroundColor = "#1e1e1e";
+                jsonContainer.style.color = "#e5e7eb";
                 jsonContainer.style.zIndex = "40";
                 
+                // 隐藏容器头部（标题与顶部按钮），将控制移动到底部工具栏
+                const jsonHeader = jsonContainer.querySelector('.flex.justify-between.items-center.mb-3');
+                if (!this.jsonOriginalStyles) this.jsonOriginalStyles = {};
+                this.jsonOriginalStyles.headerDisplay = jsonHeader ? jsonHeader.style.display : null;
+                if (jsonHeader) {
+                    jsonHeader.style.display = 'none';
+                }
+
                 // 调整内部容器高度
                 if (!previewContainer.classList.contains("hidden")) {
                     previewContainer.style.maxHeight = "calc(100vh - 60px)";
@@ -2018,13 +2027,20 @@ updateHiddenButtonState() {
                 
                 // 添加全屏工具栏
                 const fullscreenToolbar = document.createElement("div");
-                fullscreenToolbar.className = "json-fullscreen-toolbar fixed top-4 left-1/2 transform -translate-x-1/2 z-41 bg-white shadow-md px-4 py-2 rounded-md";
+                fullscreenToolbar.className = "json-fullscreen-toolbar w-full fixed bottom-0 left-0 z-41 px-4 py-2";
                 fullscreenToolbar.innerHTML = `
-                    <div class="flex items-center gap-3">
-                        <span class="text-sm text-gray-600">全屏编辑模式</span>
-                        <button id="exitFullscreenBtn" class="px-3 py-1 bg-primary text-white rounded hover:bg-primary/90 text-sm">
-                            <i class="fa fa-compress mr-1"></i>退出全屏
-                        </button>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2 text-xs text-gray-300">
+                            <i class="fa fa-code"></i>
+                            <span>全屏模式 · IDE 风格</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button id="fullscreenPreviewBtn" class="px-3 py-1 rounded bg-gray-700 text-gray-100 hover:bg-gray-600 text-sm" type="button">预览</button>
+                            <button id="fullscreenEditorBtn" class="px-3 py-1 rounded bg-gray-700 text-gray-100 hover:bg-gray-600 text-sm" type="button">编辑</button>
+                            <button id="exitFullscreenBtn" class="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700 text-sm" type="button">
+                                <i class="fa fa-compress mr-1"></i>退出全屏
+                            </button>
+                        </div>
                     </div>
                 `;
                 document.body.appendChild(fullscreenToolbar);
@@ -2035,6 +2051,48 @@ updateHiddenButtonState() {
                 fullscreenToolbar.querySelector("#exitFullscreenBtn").addEventListener("click", () => {
                     this.toggleJsonFullscreen();
                 });
+
+                // 底部切换按钮事件（与编辑模式保持一致）
+                const previewToggleBtn = fullscreenToolbar.querySelector('#fullscreenPreviewBtn');
+                const editorToggleBtn = fullscreenToolbar.querySelector('#fullscreenEditorBtn');
+
+                const setActiveButtons = () => {
+                    if (this.editMode) {
+                        // 编辑模式激活
+                        editorToggleBtn.classList.add('bg-secondary');
+                        editorToggleBtn.classList.remove('bg-gray-700');
+                        previewToggleBtn.classList.add('bg-gray-700');
+                        previewToggleBtn.classList.remove('bg-secondary');
+                    } else {
+                        // 预览模式激活
+                        previewToggleBtn.classList.add('bg-secondary');
+                        previewToggleBtn.classList.remove('bg-gray-700');
+                        editorToggleBtn.classList.add('bg-gray-700');
+                        editorToggleBtn.classList.remove('bg-secondary');
+                    }
+                };
+
+                previewToggleBtn.addEventListener('click', () => {
+                    if (this.editMode) {
+                        this.toggleEditMode();
+                        // 高度重新适配
+                        previewContainer.style.maxHeight = "calc(100vh - 60px)";
+                        previewContainer.style.width = '100%';
+                    }
+                    setActiveButtons();
+                });
+
+                editorToggleBtn.addEventListener('click', () => {
+                    if (!this.editMode) {
+                        this.toggleEditMode();
+                        editorContainer.style.maxHeight = "calc(100vh - 60px)";
+                        editorContainer.style.width = '100%';
+                    }
+                    setActiveButtons();
+                });
+
+                // 初始化按钮状态
+                setActiveButtons();
                 
                 // 按ESC键退出全屏
                 const handleEsc = (e) => {
@@ -2068,6 +2126,7 @@ updateHiddenButtonState() {
                     jsonContainer.style.borderRadius = this.jsonOriginalStyles.container.borderRadius;
                     jsonContainer.style.padding = this.jsonOriginalStyles.container.padding;
                     jsonContainer.style.backgroundColor = this.jsonOriginalStyles.container.backgroundColor;
+                    jsonContainer.style.color = '';
                     jsonContainer.style.zIndex = this.jsonOriginalStyles.container.zIndex;
                     
                     // 恢复预览和编辑区域样式
@@ -2076,6 +2135,12 @@ updateHiddenButtonState() {
                     editorContainer.style.maxHeight = this.jsonOriginalStyles.editor.maxHeight;
                     editorContainer.style.width = '';
                     
+                    // 恢复容器头部显示
+                    const jsonHeaderExit = jsonContainer.querySelector('.flex.justify-between.items-center.mb-3');
+                    if (jsonHeaderExit) {
+                        jsonHeaderExit.style.display = (this.jsonOriginalStyles.headerDisplay || '');
+                    }
+
                     // 清除保存的样式
                     this.jsonOriginalStyles = null;
                 }
@@ -2150,6 +2215,43 @@ document.addEventListener('fullscreenchange', () => {
     const editorTextArea = document.getElementById('jsonEditor');
 
     if (document.fullscreenElement === jsonContainer) {
+        // 进入原生全屏：应用沉浸式样式与底部工具栏
+        try {
+            if (typeof deckManager !== 'undefined') {
+                deckManager.jsonOriginalStyles = deckManager.jsonOriginalStyles || {
+                    container: {
+                        maxHeight: jsonContainer.style.maxHeight,
+                        margin: jsonContainer.style.margin,
+                        borderRadius: jsonContainer.style.borderRadius,
+                        padding: jsonContainer.style.padding,
+                        backgroundColor: jsonContainer.style.backgroundColor,
+                        color: jsonContainer.style.color,
+                        zIndex: jsonContainer.style.zIndex
+                    },
+                    preview: {
+                        maxHeight: previewContainer ? previewContainer.style.maxHeight : ''
+                    },
+                    editor: {
+                        maxHeight: editorContainer ? editorContainer.style.maxHeight : ''
+                    }
+                };
+            }
+            // 暗色背景与文本色
+            jsonContainer.style.backgroundColor = '#1e1e1e';
+            jsonContainer.style.color = '#e5e7eb';
+            jsonContainer.style.margin = '0';
+            jsonContainer.style.borderRadius = '0';
+            jsonContainer.style.padding = '20px';
+            jsonContainer.style.zIndex = '40';
+
+            // 隐藏顶部标题与按钮区域
+            const jsonHeader = jsonContainer.querySelector('div.flex.justify-between.items-center.mb-3');
+            if (jsonHeader && typeof deckManager !== 'undefined') {
+                deckManager.jsonOriginalStyles.headerDisplay = jsonHeader.style.display;
+                jsonHeader.style.display = 'none';
+            }
+        } catch (e) {}
+
         if (previewContainer) {
             previewContainer.style.maxHeight = 'calc(100vh - 60px)';
             previewContainer.style.overflowY = 'auto';
@@ -2181,7 +2283,80 @@ document.addEventListener('fullscreenchange', () => {
                 } catch (e) {}
             }
         }
+
+        // 创建底部工具栏（仅在原生全屏下插入到全屏元素内）
+        try {
+            // 先移除旧的
+            const existingToolbar = jsonContainer.querySelector('.json-fullscreen-toolbar');
+            if (existingToolbar) existingToolbar.remove();
+
+            const fullscreenToolbar = document.createElement('div');
+            fullscreenToolbar.className = 'json-fullscreen-toolbar w-full fixed bottom-0 left-0 z-41 px-4 py-2';
+            fullscreenToolbar.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2 text-xs text-gray-300">
+                        <i class="fa fa-code"></i>
+                        <span>全屏模式 · IDE 风格</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button id="fullscreenPreviewBtn" class="px-3 py-1 rounded bg-gray-700 text-gray-100 hover:bg-gray-600 text-sm" type="button">预览</button>
+                        <button id="fullscreenEditorBtn" class="px-3 py-1 rounded bg-gray-700 text-gray-100 hover:bg-gray-600 text-sm" type="button">编辑</button>
+                        <button id="exitFullscreenBtn" class="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700 text-sm" type="button">
+                            <i class="fa fa-compress mr-1"></i>退出全屏
+                        </button>
+                    </div>
+                </div>
+            `;
+            jsonContainer.appendChild(fullscreenToolbar);
+
+            const previewToggleBtn = fullscreenToolbar.querySelector('#fullscreenPreviewBtn');
+            const editorToggleBtn = fullscreenToolbar.querySelector('#fullscreenEditorBtn');
+            const exitBtn = fullscreenToolbar.querySelector('#exitFullscreenBtn');
+
+            const setActiveButtons = () => {
+                if (typeof deckManager !== 'undefined' && deckManager.editMode) {
+                    editorToggleBtn.classList.add('bg-secondary');
+                    editorToggleBtn.classList.remove('bg-gray-700');
+                    previewToggleBtn.classList.add('bg-gray-700');
+                    previewToggleBtn.classList.remove('bg-secondary');
+                } else {
+                    previewToggleBtn.classList.add('bg-secondary');
+                    previewToggleBtn.classList.remove('bg-gray-700');
+                    editorToggleBtn.classList.add('bg-gray-700');
+                    editorToggleBtn.classList.remove('bg-secondary');
+                }
+            };
+
+            previewToggleBtn.addEventListener('click', () => {
+                if (typeof deckManager !== 'undefined' && deckManager.editMode) {
+                    deckManager.toggleEditMode();
+                    if (previewContainer) {
+                        previewContainer.style.maxHeight = 'calc(100vh - 60px)';
+                        previewContainer.style.width = '100%';
+                    }
+                }
+                setActiveButtons();
+            });
+
+            editorToggleBtn.addEventListener('click', () => {
+                if (typeof deckManager !== 'undefined' && !deckManager.editMode) {
+                    deckManager.toggleEditMode();
+                    if (editorContainer) {
+                        editorContainer.style.maxHeight = 'calc(100vh - 60px)';
+                        editorContainer.style.width = '100%';
+                    }
+                }
+                setActiveButtons();
+            });
+
+            exitBtn.addEventListener('click', () => {
+                document.exitFullscreen().catch(() => {});
+            });
+
+            setActiveButtons();
+        } catch (e) {}
     } else {
+        // 退出原生全屏：移除底部工具栏，恢复样式与头部
         if (previewContainer) previewContainer.style.maxHeight = '';
         if (previewContainer) previewContainer.style.width = '';
         if (editorContainer) {
@@ -2194,6 +2369,36 @@ document.addEventListener('fullscreenchange', () => {
             editorTextArea.style.height = '';
             editorTextArea.style.overflowY = '';
         }
+
+        try {
+            const jsonContainer = document.querySelector('.json-container');
+            if (jsonContainer) {
+                const toolbarInContainer = jsonContainer.querySelector('.json-fullscreen-toolbar');
+                if (toolbarInContainer) toolbarInContainer.remove();
+                const toolbarInBody = document.querySelector('body > .json-fullscreen-toolbar');
+                if (toolbarInBody) toolbarInBody.remove();
+
+                const jsonHeaderExit = jsonContainer.querySelector('div.flex.justify-between.items-center.mb-3');
+                if (typeof deckManager !== 'undefined') {
+                    if (jsonHeaderExit) jsonHeaderExit.style.display = (deckManager.jsonOriginalStyles && deckManager.jsonOriginalStyles.headerDisplay) || '';
+                    if (deckManager.jsonOriginalStyles && deckManager.jsonOriginalStyles.container) {
+                        jsonContainer.style.backgroundColor = deckManager.jsonOriginalStyles.container.backgroundColor;
+                        jsonContainer.style.color = deckManager.jsonOriginalStyles.container.color;
+                        jsonContainer.style.margin = deckManager.jsonOriginalStyles.container.margin;
+                        jsonContainer.style.borderRadius = deckManager.jsonOriginalStyles.container.borderRadius;
+                        jsonContainer.style.padding = deckManager.jsonOriginalStyles.container.padding;
+                        jsonContainer.style.zIndex = deckManager.jsonOriginalStyles.container.zIndex;
+                    } else {
+                        jsonContainer.style.backgroundColor = '';
+                        jsonContainer.style.color = '';
+                        jsonContainer.style.margin = '';
+                        jsonContainer.style.borderRadius = '';
+                        jsonContainer.style.padding = '';
+                        jsonContainer.style.zIndex = '';
+                    }
+                }
+            }
+        } catch (e) {}
     }
 });
 
