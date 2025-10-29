@@ -181,7 +181,7 @@
                             <i class="fa fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
                         </div>
                     </div>
-                    <div id="deckList" class="max-h-[calc(100vh-280px)] sm:max-h-[calc(100vh-300px)] lg:max-h-[calc(100vh-320px)] overflow-y-auto space-y-1.5 content-auto">
+                    <div id="deckList" class="max-h-[calc(100vh-420px)] sm:max-h-[calc(100vh-440px)] lg:max-h-[calc(100vh-460px)] overflow-y-auto space-y-1.5 content-auto">
                     </div>
                 </div>
 
@@ -200,7 +200,7 @@
                 </div>
 
                 <!-- 反馈与公告（桌面端位于牌堆信息下方，移动端隐藏） -->
-                <div class="bg-white rounded-lg shadow-sm p-4">
+                <div class="hidden md:block bg-white rounded-lg shadow-sm p-4">
                     <div class="flex justify-between items-center mb-3">
                         <h2 class="font-semibold text-base sm:text-lg">反馈与公告</h2>
                         <a href="https://neutrdice.com/d/211" target="_blank" rel="noopener" class="px-2 py-1.5 text-xs sm:text-sm bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-md flex items-center transition-colors" aria-label="前往反馈">
@@ -216,7 +216,7 @@
                 </div>
             </div>
 
-            <div class="lg:col-span-1 bg-white rounded-lg shadow-sm p-4">
+            <div id="cardsEditorCard" data-align-offset="18" class="lg:col-span-1 bg-white rounded-lg shadow-sm p-4 flex flex-col min-h-[70vh] lg:min-h-0 lg:overflow-hidden">
                 <div class="flex justify-between items-center mb-3">
                     <h2 class="font-semibold text-base sm:text-lg">牌面编辑</h2>
                     <div class="flex space-x-2">
@@ -228,11 +228,11 @@
                         </button>
                     </div>
                 </div>
-                <div id="cardsEditor" class="space-y-3 max-h-[calc(100vh-280px)] sm:max-h-[calc(100vh-300px)] lg:max-h-[calc(100vh-320px)] overflow-y-auto pb-4 content-auto">
+                <div id="cardsEditor" class="space-y-3 flex-1 overflow-y-auto pb-4 content-auto min-h-0">
                 </div>
             </div>
 
-            <div class="lg:col-span-1 space-y-4">
+            <div id="rightColumn" class="lg:col-span-1 space-y-4">
                 <div class="bg-white rounded-lg shadow-sm p-2 sm:p-4 json-container">
                     <div class="flex justify-between items-center mb-3">
                         <h2 class="font-semibold text-base sm:text-lg">JSON数据</h2>

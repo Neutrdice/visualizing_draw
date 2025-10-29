@@ -3357,3 +3357,85 @@ function bindEventListeners() {
     }
 }
     
+// Layout alignment: clamp editor card to probability block bottom
+(() => {
+  const clampToProbability = () => {
+    const editorCard = document.getElementById('cardsEditorCard');
+    const probCanvas = document.getElementById('probabilityChart');
+    const probContainer = probCanvas ? probCanvas.parentElement : null;
+    if (!editorCard || !probContainer) return;
+    const isDesktop = window.matchMedia('(min-width: 1024px)').matches;
+    if (!isDesktop) {
+      editorCard.style.maxHeight = '';
+      editorCard.style.overflow = '';
+      return;
+    }
+    const editorRect = editorCard.getBoundingClientRect();
+    const probRect = probContainer.getBoundingClientRect();
+    // Offset semantics: positive => longer, negative => shorter
+    let offset = 0; // px, default no gap
+    const custom = editorCard.getAttribute('data-align-offset');
+    if (custom) {
+      const n = parseInt(custom, 10);
+      if (!Number.isNaN(n)) offset = n;
+    }
+    const base = Math.floor(probRect.bottom - editorRect.top);
+    const available = Math.max(0, base + offset);
+    if (available > 0) {
+      editorCard.style.maxHeight = available + 'px';
+      editorCard.style.overflow = 'hidden';
+    }
+  };
+
+  window.addEventListener('load', clampToProbability);
+  window.addEventListener('resize', clampToProbability);
+  if (window.ResizeObserver) {
+    const probCanvas = document.getElementById('probabilityChart');
+    const probContainer = probCanvas ? probCanvas.parentElement : null;
+    const editorCard = document.getElementById('cardsEditorCard');
+    if (probContainer && editorCard) {
+      const ro = new ResizeObserver(clampToProbability);
+      ro.observe(probContainer);
+      ro.observe(editorCard);
+    }
+  }
+})();
+
+// Mobile editor: cap visible area to the height of first 3 cards, allow scroll
+(() => {
+  const limitMobileEditorViewport = () => {
+    const cardsEditor = document.getElementById('cardsEditor');
+    if (!cardsEditor) return;
+    const isMobile = window.matchMedia('(max-width: 767px)').matches;
+    if (!isMobile) {
+      cardsEditor.style.maxHeight = '';
+      cardsEditor.style.overflowY = 'auto';
+      return;
+    }
+    const items = cardsEditor.querySelectorAll('.card-item');
+    if (items.length === 0) {
+      cardsEditor.style.maxHeight = '';
+      cardsEditor.style.overflowY = 'auto';
+      return;
+    }
+    const first = items[0];
+    const lastIndex = Math.min(2, items.length - 1);
+    const last = items[lastIndex];
+    const firstRect = first.getBoundingClientRect();
+    const lastRect = last.getBoundingClientRect();
+    const visibleHeight = Math.max(0, Math.floor(lastRect.bottom - firstRect.top) + 8); // small padding
+    cardsEditor.style.maxHeight = visibleHeight + 'px';
+    cardsEditor.style.overflowY = 'auto';
+  };
+
+  window.addEventListener('load', limitMobileEditorViewport);
+  window.addEventListener('resize', limitMobileEditorViewport);
+  if (window.MutationObserver) {
+    const cardsEditor = document.getElementById('cardsEditor');
+    if (cardsEditor) {
+      const mo = new MutationObserver(limitMobileEditorViewport);
+      mo.observe(cardsEditor, { childList: true, subtree: false });
+    }
+  }
+})();
+    
