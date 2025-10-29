@@ -13,6 +13,9 @@
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js" defer></script>
+    <!-- 前端本地打包依赖：JSZip 与 FileSaver -->
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js" defer></script>
     <link rel="stylesheet" href="./css/style.css">
     <script>
         tailwind.config = {
@@ -103,7 +106,10 @@
                 <h1 class="text-xl font-bold text-primary">牌堆生成编辑器</h1>
             </div>
             <div id="headerActions" class="flex flex-wrap gap-2 sm:gap-3 justify-end">
-                <button id="importBtn" class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-200 hover:bg-gray-300 rounded-md flex items-center transition-colors">
+                <button id="mediaBtn" class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-md flex items-center transition-colors">
+                    <i class="fa fa-image mr-2"></i>媒体库
+                </button>
+                <button id="importBtn" class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-500 text-white hover:bg-blue-600 rounded-md flex items-center transition-colors">
                     <i class="fa fa-upload mr-2"></i>导入
                 </button>
                 <button id="exportBtn" class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-secondary text-white hover:bg-secondary/90 rounded-md flex items-center transition-colors">
@@ -192,6 +198,22 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- 反馈与公告（位于牌堆信息下方） -->
+                <div class="bg-white rounded-lg shadow-sm p-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h2 class="font-semibold text-base sm:text-lg">反馈与公告</h2>
+                        <a href="https://neutrdice.com/d/211" target="_blank" rel="noopener" class="px-2 py-1.5 text-xs sm:text-sm bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-md flex items-center transition-colors" aria-label="前往反馈">
+                            <i class="fa fa-external-link mr-2"></i>前往反馈
+                        </a>
+                    </div>
+                    <div id="announcementPanel" class="space-y-2">
+                        <div class="text-gray-500 text-sm">公告栏</div>
+                        <ul id="announcementList" class="list-disc pl-5 text-sm text-gray-700">
+                            <li>暂无公告，前往论坛查看最新更新。</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
 
             <div class="lg:col-span-1 bg-white rounded-lg shadow-sm p-4">
@@ -238,6 +260,8 @@
                         </div>
                     </div>
                 </div>
+
+                
 
                 <div class="bg-white rounded-lg shadow-sm p-4">
                     <div class="flex flex-wrap justify-between items-center mb-3 gap-2">
@@ -296,11 +320,40 @@
         </div>
     </div>
 
+    <!-- 多媒体库弹窗 -->
+    <div id="mediaModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-lg w-full max-w-2xl mx-4">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="font-semibold text-lg">多媒体库</h3>
+                <button id="closeMediaModal" class="text-gray-400 hover:text-gray-600">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <input type="file" id="mediaFileInput" class="hidden" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" multiple>
+                <div id="mediaDropArea" class="border-2 border-dashed border-gray-300 rounded-md p-6 text-center hover:bg-gray-50 transition-colors cursor-pointer mb-3">
+                    <i class="fa fa-cloud-upload text-3xl text-gray-400 mb-2"></i>
+                    <p class="text-sm text-gray-500">拖放图片到此处或点击上传</p>
+                </div>
+                <div class="text-xs text-gray-500 mb-2">当前仅支持图片类（PNG/JPG/JPEG/WebP/GIF），其它类型将忽略。</div>
+                <div id="mediaList" class="space-y-2 max-h-[60vh] overflow-y-auto content-auto" aria-live="polite">
+                    <div class="text-gray-400 text-sm">尚未上传图片，点击或拖拽到上方区域添加。</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 资源打包依赖 -->
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
     <script src="./js/main.js" defer></script>
     <!-- 移动端悬浮操作按钮 -->
     <div id="mobileFab" class="fab-container" aria-label="快速操作" aria-expanded="false">
         <div class="fab-menu" aria-hidden="true">
-            <button id="fabImportBtn" class="fab-option" title="导入" aria-label="导入">
+            <button id="fabMediaBtn" class="fab-option bg-primary text-white" title="媒体库" aria-label="媒体库">
+                <i class="fa fa-image"></i>
+            </button>
+            <button id="fabImportBtn" class="fab-option bg-blue-500 text-white" title="导入" aria-label="导入">
                 <i class="fa fa-upload"></i>
             </button>
             <button id="fabExportBtn" class="fab-option" title="导出" aria-label="导出">
@@ -311,6 +364,9 @@
             </button>
             <button id="fabClearBtn" class="fab-option" title="清除" aria-label="清除">
                 <i class="fa fa-trash"></i>
+            </button>
+            <button id="fabForumBtn" class="fab-option" title="反馈与公告" aria-label="反馈与公告">
+                <i class="fa fa-bullhorn"></i>
             </button>
         </div>
         <button id="fabMainBtn" class="fab-main" aria-label="展开操作">

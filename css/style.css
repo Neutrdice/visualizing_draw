@@ -623,15 +623,19 @@ body {
 }
 
 /* 颜色区分各操作按钮 */
+#fabMediaBtn  { background-color: var(--primary); color: #fff; }
 #fabImportBtn { background-color: var(--info); color: #fff; }
 #fabExportBtn { background-color: var(--secondary); color: #fff; }
 #fabSaveBtn   { background-color: var(--primary); color: #fff; }
 #fabClearBtn  { background-color: var(--danger); color: #fff; }
+#fabForumBtn  { background-color: var(--accent); color: #fff; }
 
+#fabMediaBtn:hover  { filter: brightness(0.95); }
 #fabImportBtn:hover { filter: brightness(0.95); }
 #fabExportBtn:hover { filter: brightness(0.95); }
 #fabSaveBtn:hover   { filter: brightness(0.95); }
 #fabClearBtn:hover  { filter: brightness(0.95); }
+#fabForumBtn:hover  { filter: brightness(0.95); }
 
 .fab-container.open .fab-option {
     opacity: 1;
@@ -641,19 +645,23 @@ body {
 }
 
 /* 轻微的阶梯动画效果 */
+.fab-container.open #fabMediaBtn  { animation-delay: 0.00s; }
 .fab-container.open #fabImportBtn { animation-delay: 0.02s; }
 .fab-container.open #fabExportBtn { animation-delay: 0.05s; }
 .fab-container.open #fabSaveBtn   { animation-delay: 0.08s; }
 .fab-container.open #fabClearBtn  { animation-delay: 0.11s; }
+.fab-container.open #fabForumBtn  { animation-delay: 0.14s; }
 
 /* 收回动画（在 open + closing 状态下运行） */
 .fab-container.open.closing .fab-option {
     animation: fabPopOut 160ms ease both;
 }
+.fab-container.open.closing #fabMediaBtn  { animation-delay: 0.00s; }
 .fab-container.open.closing #fabImportBtn { animation-delay: 0.00s; }
 .fab-container.open.closing #fabExportBtn { animation-delay: 0.02s; }
 .fab-container.open.closing #fabSaveBtn   { animation-delay: 0.04s; }
 .fab-container.open.closing #fabClearBtn  { animation-delay: 0.06s; }
+.fab-container.open.closing #fabForumBtn  { animation-delay: 0.08s; }
 
 @keyframes fabPopIn {
     0%   { opacity: 0; transform: translateY(10px) scale(0.86); }

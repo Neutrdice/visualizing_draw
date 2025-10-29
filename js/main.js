@@ -7,6 +7,10 @@ const deckManager = {
     editMode: false,
     fullscreenJson: false,
     jsonOriginalStyles: null, // 用于保存全屏前的样式
+    // 多媒体库配置
+    mediaDB: null,
+    mediaDBName: 'DeckMediaDB',
+    mediaStoreName: 'images',
     // 移动端拖动排序配置与状态
     isTouchDevice: typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0),
     longPressDelay: 250,
@@ -48,6 +52,8 @@ const deckManager = {
         }
         this.updateJsonPreview();
         this.initProbabilityChart();
+        // 初始化多媒体库
+        this.initMediaLibrary();
         this.updateDrawDeckSelector();
         
         // 添加隐藏牌堆按钮事件
@@ -1424,6 +1430,295 @@ updateHiddenButtonState() {
             return false;
         }
     },
+
+    // ========= 多媒体库 / IndexedDB =========
+    async initMediaLibrary() {
+        try {
+            await this.openMediaDB();
+            await this.renderMediaList();
+        } catch (e) {
+            console.error("初始化多媒体库失败:", e);
+        }
+    },
+
+    openMediaDB() {
+        return new Promise((resolve, reject) => {
+            if (this.mediaDB) return resolve(this.mediaDB);
+            const request = indexedDB.open(this.mediaDBName, 1);
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains(this.mediaStoreName)) {
+                    const store = db.createObjectStore(this.mediaStoreName, { keyPath: 'name' });
+                    store.createIndex('createdAt', 'createdAt', { unique: false });
+                }
+            };
+            request.onsuccess = (event) => {
+                this.mediaDB = event.target.result;
+                resolve(this.mediaDB);
+            };
+            request.onerror = (event) => {
+                reject(event.target.error || new Error('无法打开媒体库数据库'));
+            };
+        });
+    },
+
+    _getStore(mode = 'readonly') {
+        if (!this.mediaDB) throw new Error('媒体库数据库未初始化');
+        const tx = this.mediaDB.transaction(this.mediaStoreName, mode);
+        return tx.objectStore(this.mediaStoreName);
+    },
+
+    getAllImages() {
+        return new Promise((resolve, reject) => {
+            try {
+                const store = this._getStore('readonly');
+                const req = store.getAll();
+                req.onsuccess = () => resolve(req.result || []);
+                req.onerror = () => reject(req.error);
+            } catch (e) { reject(e); }
+        });
+    },
+
+    getImage(name) {
+        return new Promise((resolve, reject) => {
+            try {
+                const store = this._getStore('readonly');
+                const req = store.get(name);
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror = () => reject(req.error);
+            } catch (e) { reject(e); }
+        });
+    },
+
+    putImage(record) {
+        return new Promise((resolve, reject) => {
+            try {
+                const store = this._getStore('readwrite');
+                const req = store.put(record);
+                req.onsuccess = () => resolve(record);
+                req.onerror = () => reject(req.error);
+            } catch (e) { reject(e); }
+        });
+    },
+
+    deleteImage(name) {
+        return new Promise((resolve, reject) => {
+            try {
+                const store = this._getStore('readwrite');
+                const req = store.delete(name);
+                req.onsuccess = () => resolve(true);
+                req.onerror = () => reject(req.error);
+            } catch (e) { reject(e); }
+        });
+    },
+
+    sanitizeFilename(name) {
+        return name.replace(/[\\/:*?"<>|\u0000-\u001F]/g, '_').trim();
+    },
+
+    async ensureUniqueName(name) {
+        const clean = this.sanitizeFilename(name);
+        const dot = clean.lastIndexOf('.');
+        const base = dot > 0 ? clean.substring(0, dot) : clean;
+        const ext = dot > 0 ? clean.substring(dot) : '';
+        let candidate = clean;
+        let i = 1;
+        while (await this.getImage(candidate)) {
+            candidate = `${base}_${i}${ext}`;
+            i += 1;
+        }
+        return candidate;
+    },
+
+    async addImagesFromFiles(fileList) {
+        if (!fileList || fileList.length === 0) return;
+        await this.openMediaDB();
+        let successCount = 0;
+        let unsupportedCount = 0;
+        for (const file of fileList) {
+            const typeOk = /^(image\/(png|jpeg|jpg|webp|gif))$/i.test(file.type) || /(\.png|\.jpe?g|\.webp|\.gif)$/i.test(file.name);
+            if (!typeOk) { unsupportedCount += 1; continue; }
+            const name = await this.ensureUniqueName(file.name);
+            const record = {
+                name,
+                type: file.type || 'application/octet-stream',
+                size: file.size || 0,
+                createdAt: Date.now(),
+                blob: file,
+            };
+            try {
+                await this.putImage(record);
+                successCount += 1;
+            } catch (e) {
+                console.error('保存图片失败:', e);
+            }
+        }
+        await this.renderMediaList();
+        if (successCount > 0) this.showNotification(`已添加 ${successCount} 张图片到多媒体库`);
+        if (unsupportedCount > 0) this.showNotification(`已忽略 ${unsupportedCount} 个非图片文件`, 'warning');
+    },
+
+    async renameImage(oldName, newNameInput) {
+        await this.openMediaDB();
+        const record = await this.getImage(oldName);
+        if (!record) return this.showNotification('未找到该图片记录', 'warning');
+        const desired = this.sanitizeFilename(newNameInput || oldName);
+        if (!desired) return this.showNotification('名称不能为空', 'warning');
+        const dot = desired.lastIndexOf('.');
+        const ext = record.type && /image\//.test(record.type) && dot < 0 ? (oldName.match(/\.[^\.]+$/)?.[0] || '') : desired.substring(dot);
+        const base = dot > 0 ? desired.substring(0, dot) : desired.replace(ext, '');
+        const finalName = await this.ensureUniqueName(base + ext);
+        if (finalName === oldName) return;
+
+        await this.deleteImage(oldName);
+        record.name = finalName;
+        await this.putImage(record);
+
+        const changedCount = this.updateCQReferences(oldName, finalName);
+        await this.renderMediaList();
+        this.showNotification(`已重命名为 ${finalName}${changedCount ? `，更新 ${changedCount} 处 CQ 引用` : ''}`);
+    },
+
+    async removeImage(name) {
+        await this.openMediaDB();
+        const refs = this.findCQReferencesInDecks();
+        if (refs.has(`image/${name}`)) {
+            const ok = confirm('该图片在牌堆中被 CQ 引用，删除后引用将失效，确认删除？');
+            if (!ok) return;
+        }
+        await this.deleteImage(name);
+        await this.renderMediaList();
+        this.showNotification('图片已删除');
+    },
+
+    async renderMediaList() {
+        const container = document.getElementById('mediaList');
+        if (!container) return;
+        await this.openMediaDB();
+        const items = await this.getAllImages();
+        if (!items || items.length === 0) {
+            container.innerHTML = '<div class="text-gray-400 text-sm">尚未上传图片，点击“上传图片”添加。</div>';
+            return;
+        }
+        const html = items.map(rec => {
+            const sizeKB = rec.size ? Math.round(rec.size / 1024) : 0;
+            const url = URL.createObjectURL(rec.blob);
+            return `
+                <div class="flex items-center justify-between border border-gray-200 rounded-md p-2" data-name="${rec.name}">
+                    <div class="flex items-center gap-3">
+                        <img src="${url}" alt="${rec.name}" class="w-10 h-10 object-cover rounded">
+                        <div class="text-sm">
+                            <div class="font-medium">${rec.name}</div>
+                            <div class="text-gray-400 text-xs">${rec.type || ''} · ${sizeKB}KB</div>
+                        </div>
+                    </div>
+                    <div class="flex gap-1">
+                        <button class="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded media-action" data-action="copy-cq" data-name="${rec.name}">复制CQ</button>
+                        <button class="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded media-action" data-action="copy-path" data-name="${rec.name}">复制路径</button>
+                        <button class="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded media-action" data-action="preview" data-name="${rec.name}">预览</button>
+                        <button class="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded media-action" data-action="rename" data-name="${rec.name}">重命名</button>
+                        <button class="px-2 py-1 text-xs bg-red-100 text-red-600 hover:bg-red-200 rounded media-action" data-action="delete" data-name="${rec.name}">删除</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        container.innerHTML = html;
+    },
+
+    async copyTextToClipboard(text) {
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+            }
+            this.showNotification('已复制到剪贴板');
+        } catch (e) {
+            this.showNotification('复制失败：' + e.message, 'error');
+        }
+    },
+
+    getCQRegex() { return /\[CQ:image,file=image\/([^\]]+)\]/g; },
+
+    findCQReferencesInDecks() {
+        const set = new Set();
+        const re = this.getCQRegex();
+        for (const deckName of Object.keys(this.decks)) {
+            const cards = this.decks[deckName] || [];
+            for (const card of cards) {
+                const text = String(card || '');
+                let m; re.lastIndex = 0;
+                while ((m = re.exec(text)) !== null) {
+                    if (m[1]) set.add(`image/${m[1]}`);
+                }
+            }
+        }
+        return set;
+    },
+
+    escapeRegExp(str) { return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); },
+
+    updateCQReferences(oldName, newName) {
+        const oldPattern = new RegExp(`\\[CQ:image,file=image/${this.escapeRegExp(oldName)}\\]`, 'g');
+        let changed = 0;
+        for (const deckName of Object.keys(this.decks)) {
+            const cards = this.decks[deckName] || [];
+            const updated = cards.map((card) => {
+                const before = String(card || '');
+                const after = before.replace(oldPattern, `[CQ:image,file=image/${newName}]`);
+                if (before !== after) changed += 1;
+                return after;
+            });
+            this.decks[deckName] = updated;
+        }
+        if (changed) {
+            this.updateJsonPreview();
+            if (this.currentDeck) this.renderCards();
+            this.saveToLocalStorage();
+        }
+        return changed;
+    },
+
+    async exportConditionalBundle() {
+        try {
+            const jsonText = JSON.stringify(this.decks, null, 4);
+            const refs = this.findCQReferencesInDecks();
+            if (refs.size > 0 && typeof JSZip !== 'undefined') {
+                this.showNotification('正在打包资源，请稍候…');
+                const zip = new JSZip();
+                zip.file('data.json', jsonText);
+                const folder = zip.folder('image');
+                await this.openMediaDB();
+                const items = await this.getAllImages();
+                for (const rec of items) { folder.file(rec.name, rec.blob); }
+                const blob = await zip.generateAsync({ type: 'blob' });
+                if (typeof saveAs === 'function') { saveAs(blob, `资源包_${Date.now()}.zip`); }
+                else {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a'); a.href = url; a.download = `资源包_${Date.now()}.zip`;
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+                }
+                this.showNotification('已导出 zip 资源包');
+            } else {
+                const blob = new Blob([jsonText], { type: 'application/json' });
+                if (typeof saveAs === 'function') { saveAs(blob, 'data.json'); }
+                else {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a'); a.href = url; a.download = 'data.json';
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+                }
+                this.showNotification('已导出 JSON 文件');
+            }
+        } catch (e) {
+            console.error('导出资源失败:', e);
+            this.showNotification('导出失败：' + e.message, 'error');
+        }
+    },
     
     // 更新抽取牌堆选择器（过滤隐藏牌堆）
     updateDrawDeckSelector() {
@@ -2153,6 +2448,52 @@ updateHiddenButtonState() {
                 this.showNotification("退出全屏模式失败", "error");
             }
         }
+    },
+    
+    // 从独立文件加载公告
+    async loadAnnouncements() {
+        const listEl = document.getElementById("announcementList");
+        if (!listEl) return;
+        try {
+            const res = await fetch("announcements.json", { cache: "no-store" });
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            const json = await res.json();
+            const items = Array.isArray(json) ? json : (json.items || []);
+            listEl.innerHTML = "";
+            if (!items.length) {
+                listEl.innerHTML = '<li class="text-gray-400">暂无公告</li>';
+                return;
+            }
+            items.forEach((item) => {
+                const li = document.createElement("li");
+                li.className = "leading-6";
+                let text = "";
+                let linkHref = null;
+                if (typeof item === "string") {
+                    text = item;
+                } else {
+                    const dateStr = item.date ? `【${item.date}】` : "";
+                    const title = item.title || "";
+                    const content = item.content || "";
+                    text = [dateStr, title, content].filter(Boolean).join(" ");
+                    linkHref = item.link || null;
+                }
+                li.textContent = text;
+                if (linkHref) {
+                    const a = document.createElement("a");
+                    a.href = linkHref;
+                    a.target = "_blank";
+                    a.rel = "noopener";
+                    a.textContent = " 查看详情";
+                    a.className = "text-blue-600 hover:underline ml-1";
+                    li.appendChild(a);
+                }
+                listEl.appendChild(li);
+            });
+        } catch (err) {
+            console.error("公告加载失败:", err);
+            listEl.innerHTML = '<li class="text-red-600">公告加载失败，请稍后重试。</li>';
+        }
     }
 };
 
@@ -2161,6 +2502,10 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
         deckManager.init();
         bindEventListeners();
+        // 加载公告内容
+        if (deckManager && typeof deckManager.loadAnnouncements === 'function') {
+            deckManager.loadAnnouncements();
+        }
     } catch (error) {
         console.error("初始化失败:", error);
         alert("应用初始化失败: " + error.message + "\n请刷新页面重试");
@@ -2478,7 +2823,8 @@ function bindEventListeners() {
     const exportBtn = document.getElementById("exportBtn");
     if (exportBtn) {
         exportBtn.addEventListener("click", () => {
-            deckManager.exportJson();
+            // 融合导出逻辑：根据是否含CQ引用决定导出zip或data.json
+            deckManager.exportConditionalBundle();
         });
     }
     
@@ -2557,7 +2903,25 @@ function bindEventListeners() {
             });
         }
     }
-    
+
+    // 多媒体库模态框
+    const mediaModal = document.getElementById('mediaModal');
+    if (mediaModal) {
+        const mediaBtn = document.getElementById('mediaBtn');
+        if (mediaBtn) {
+            mediaBtn.addEventListener('click', async () => {
+                mediaModal.classList.remove('hidden');
+                await deckManager.renderMediaList();
+            });
+        }
+        const closeMediaModal = document.getElementById('closeMediaModal');
+        if (closeMediaModal) {
+            closeMediaModal.addEventListener('click', () => {
+                mediaModal.classList.add('hidden');
+            });
+        }
+    }
+
     // 抽取牌面按钮由 deckManager.init 绑定，避免重复绑定
     
     // 拖放文件上传
@@ -2632,7 +2996,67 @@ function bindEventListeners() {
             deckManager.applyJsonChanges();
         });
     }
-    
+
+    // 多媒体库事件
+    const mediaFileInput = document.getElementById('mediaFileInput');
+    if (mediaFileInput) {
+        mediaFileInput.addEventListener('change', async (e) => {
+            const files = e.target.files;
+            await deckManager.addImagesFromFiles(files);
+            mediaFileInput.value = '';
+        });
+    }
+
+    // 媒体库拖拽上传与点击打开
+    const mediaDropArea = document.getElementById('mediaDropArea');
+    if (mediaDropArea && mediaFileInput) {
+        mediaDropArea.addEventListener('click', () => mediaFileInput.click());
+        mediaDropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            mediaDropArea.classList.add('bg-gray-100');
+        });
+        mediaDropArea.addEventListener('dragleave', () => {
+            mediaDropArea.classList.remove('bg-gray-100');
+        });
+        mediaDropArea.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            mediaDropArea.classList.remove('bg-gray-100');
+            const files = e.dataTransfer.files;
+            await deckManager.addImagesFromFiles(files);
+        });
+    }
+
+    const mediaList = document.getElementById('mediaList');
+    if (mediaList) {
+        mediaList.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.media-action');
+            if (!btn) return;
+            const action = btn.getAttribute('data-action');
+            const name = btn.getAttribute('data-name');
+            if (!action || !name) return;
+            if (action === 'copy-cq') {
+                const cq = `[CQ:image,file=image/${name}]`;
+                await deckManager.copyTextToClipboard(cq);
+            } else if (action === 'copy-path') {
+                await deckManager.copyTextToClipboard(`image/${name}`);
+            } else if (action === 'preview') {
+                const rec = await deckManager.getImage(name);
+                if (rec?.blob) {
+                    const url = URL.createObjectURL(rec.blob);
+                    window.open(url, '_blank');
+                    setTimeout(() => URL.revokeObjectURL(url), 10000);
+                }
+            } else if (action === 'rename') {
+                const newName = prompt('输入新文件名（保留或更改扩展名）：', name);
+                if (newName && newName.trim()) {
+                    await deckManager.renameImage(name, newName.trim());
+                }
+            } else if (action === 'delete') {
+                await deckManager.removeImage(name);
+            }
+        });
+    }
+
     // 为JSON编辑器添加快捷键
     const jsonEditor = document.getElementById("jsonEditor");
     if (jsonEditor) {
@@ -2807,10 +3231,12 @@ function bindEventListeners() {
     // 移动端悬浮按钮及子菜单
     const fabContainer = document.getElementById('mobileFab');
     const fabMainBtn = document.getElementById('fabMainBtn');
+    const fabMediaBtn = document.getElementById('fabMediaBtn');
     const fabImportBtn = document.getElementById('fabImportBtn');
     const fabExportBtn = document.getElementById('fabExportBtn');
     const fabSaveBtn = document.getElementById('fabSaveBtn');
     const fabClearBtn = document.getElementById('fabClearBtn');
+    const fabForumBtn = document.getElementById('fabForumBtn');
 
     if (fabContainer && fabMainBtn) {
         const closeFab = () => {
@@ -2850,12 +3276,23 @@ function bindEventListeners() {
             const importModalActive = importModal && !importModal.classList.contains('hidden') && importModal.contains(e.target);
             const clearConfirmModal = document.getElementById('clearConfirmModal');
             const clearModalActive = clearConfirmModal && clearConfirmModal.contains(e.target);
+            const mediaModalEl = document.getElementById('mediaModal');
+            const mediaModalActive = mediaModalEl && !mediaModalEl.classList.contains('hidden') && mediaModalEl.contains(e.target);
 
-            // 在FAB本体、导入弹窗、清除确认弹窗内点击时不收回
-            if (clickedInsideFab || importModalActive || clearModalActive) return;
+            // 在FAB本体、导入弹窗、媒体库弹窗、清除确认弹窗内点击时不收回
+            if (clickedInsideFab || importModalActive || mediaModalActive || clearModalActive) return;
 
             closeFab();
         });
+
+        // 媒体库 - 复用桌面媒体库按钮逻辑
+        if (fabMediaBtn) {
+            fabMediaBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const mediaBtn = document.getElementById('mediaBtn');
+                if (mediaBtn) mediaBtn.click();
+            });
+        }
 
         // 导入 - 复用现有导入按钮逻辑
         if (fabImportBtn) {
@@ -2870,8 +3307,8 @@ function bindEventListeners() {
         if (fabExportBtn) {
             fabExportBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (typeof deckManager !== 'undefined' && deckManager.exportJson) {
-                    deckManager.exportJson();
+                if (typeof deckManager !== 'undefined' && deckManager.exportConditionalBundle) {
+                    deckManager.exportConditionalBundle();
                 }
             });
         }
@@ -2894,6 +3331,14 @@ function bindEventListeners() {
                 if (typeof deckManager !== 'undefined' && deckManager.clearAllDecks) {
                     deckManager.clearAllDecks();
                 }
+            });
+        }
+
+        // 前往论坛反馈与更新公告
+        if (fabForumBtn) {
+            fabForumBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                window.open('https://neutrdice.com/d/211', '_blank');
             });
         }
     }
