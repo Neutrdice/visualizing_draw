@@ -835,3 +835,6 @@ textarea.rounded-md {
     box-shadow: inset 0 -2px 0 var(--primary);
 }
     
+/* 提升媒体库弹窗层级，避免被悬浮菜单覆盖 */
+#mediaModal { z-index: 10100; }
+    

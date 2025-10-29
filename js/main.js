@@ -2452,16 +2452,14 @@ updateHiddenButtonState() {
     
     // 从独立文件加载公告
     async loadAnnouncements() {
-        const listEl = document.getElementById("announcementList");
-        if (!listEl) return;
-        try {
-            const res = await fetch("announcements.json", { cache: "no-store" });
-            if (!res.ok) throw new Error("HTTP " + res.status);
-            const json = await res.json();
-            const items = Array.isArray(json) ? json : (json.items || []);
-            listEl.innerHTML = "";
+        const desktopList = document.getElementById("announcementList");
+        const mobileList = document.getElementById("announcementListMobile");
+        if (!desktopList && !mobileList) return;
+        const renderList = (el, items) => {
+            if (!el) return;
+            el.innerHTML = "";
             if (!items.length) {
-                listEl.innerHTML = '<li class="text-gray-400">暂无公告</li>';
+                el.innerHTML = '<li class="text-gray-400">暂无公告</li>';
                 return;
             }
             items.forEach((item) => {
@@ -2488,11 +2486,21 @@ updateHiddenButtonState() {
                     a.className = "text-blue-600 hover:underline ml-1";
                     li.appendChild(a);
                 }
-                listEl.appendChild(li);
+                el.appendChild(li);
             });
+        };
+        try {
+            const res = await fetch("announcements.json", { cache: "no-store" });
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            const json = await res.json();
+            const items = Array.isArray(json) ? json : (json.items || []);
+            renderList(desktopList, items);
+            renderList(mobileList, items);
         } catch (err) {
             console.error("公告加载失败:", err);
-            listEl.innerHTML = '<li class="text-red-600">公告加载失败，请稍后重试。</li>';
+            const errHtml = '<li class="text-red-600">公告加载失败，请稍后重试。</li>';
+            if (desktopList) desktopList.innerHTML = errHtml;
+            if (mobileList) mobileList.innerHTML = errHtml;
         }
     }
 };
@@ -3290,7 +3298,11 @@ function bindEventListeners() {
             fabMediaBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const mediaBtn = document.getElementById('mediaBtn');
-                if (mediaBtn) mediaBtn.click();
+                if (mediaBtn) {
+                    mediaBtn.click();
+                    // 打开媒体库后收回悬浮菜单，避免遮挡弹窗
+                    closeFab();
+                }
             });
         }
 
